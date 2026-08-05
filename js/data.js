@@ -1,105 +1,108 @@
-/* data.js — assignment (task) storage + activity log, backed by localStorage */
-
-const TASKS_KEY = 'atd_tasks';
-const ACTIVITY_KEY = 'atd_activities';
+/* data.js — assignments (tasks), comments, and the activity log, backed by
+   Supabase/Postgres (see js/supabaseClient.js). Row Level Security on the
+   `assignments`/`comments`/`activity_log` tables already scopes what each
+   signed-in user can see, so these functions don't re-filter by role. */
 
 const STATUSES = ['Pending', 'Accepted', 'In Progress', 'Under Review', 'Completed', 'On Hold', 'Blocked', 'Cancelled'];
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
 
-function seedTasks() {
-  if (localStorage.getItem(TASKS_KEY)) return;
-  const seed = [
-    {
-      id: 1,
-      division: 'CDA',
-      title: 'Website Content Update',
-      description: 'Refresh homepage copy and update the services section with new offerings.',
-      assignedBy: 'manager@demo.com',
-      assignedTo: 'employee@demo.com',
-      priority: 'High',
-      status: 'In Progress',
-      startDate: '2026-08-05',
-      dueDate: '2026-08-08',
-      estimatedTime: '8 hrs',
-      actualTime: '',
-      progress: 60,
-      remarks: '',
-      comments: [
-        { user: 'Pavithra', text: 'Started on the homepage section.', date: '2026-08-05T09:15:00' },
-      ],
-      createdAt: '2026-08-05T09:00:00',
-    },
-  ];
-  localStorage.setItem(TASKS_KEY, JSON.stringify(seed));
-}
-
-function getTasks() {
-  seedTasks();
-  return JSON.parse(localStorage.getItem(TASKS_KEY) || '[]');
-}
-
-function saveTasks(tasks) {
-  localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
-}
-
-function getTask(id) {
-  return getTasks().find(t => t.id === id);
-}
-
-function createTask(task, actor) {
-  const tasks = getTasks();
-  const newTask = {
-    id: Date.now(),
-    status: 'Pending',
-    actualTime: '',
-    progress: 0,
-    comments: [],
-    createdAt: new Date().toISOString(),
-    ...task,
+function mapTask(row) {
+  return {
+    id: row.id,
+    division: row.division,
+    title: row.title,
+    description: row.description,
+    assignedBy: row.assigned_by,
+    assignedTo: row.assigned_to,
+    priority: row.priority,
+    status: row.status,
+    startDate: row.start_date,
+    dueDate: row.due_date,
+    estimatedTime: row.estimated_time,
+    actualTime: row.actual_time,
+    progress: row.progress,
+    remarks: row.remarks,
+    createdAt: row.created_at,
   };
-  tasks.push(newTask);
-  saveTasks(tasks);
-  logActivity(newTask.id, `created assignment "${newTask.title}"`, actor);
+}
+
+async function getTasks() {
+  const { data, error } = await sb.from('assignments').select('*').order('due_date');
+  if (error) { console.error(error); return []; }
+  return data.map(mapTask);
+}
+
+async function createTask(task, actorId) {
+  const { data, error } = await sb.from('assignments').insert({
+    division: task.division,
+    title: task.title,
+    description: task.description || '',
+    assigned_by: task.assignedBy,
+    assigned_to: task.assignedTo,
+    priority: task.priority,
+    status: task.status || 'Pending',
+    start_date: task.startDate,
+    due_date: task.dueDate,
+    estimated_time: task.estimatedTime || '',
+    progress: task.progress || 0,
+    remarks: task.remarks || '',
+  }).select().single();
+  if (error) { console.error(error); return null; }
+
+  const newTask = mapTask(data);
+  await logActivity(newTask.id, `created assignment "${newTask.title}"`, actorId);
   return newTask;
 }
 
-function updateTask(id, changes, actor, note) {
-  const tasks = getTasks();
-  const idx = tasks.findIndex(t => t.id === id);
-  if (idx === -1) return null;
-  tasks[idx] = { ...tasks[idx], ...changes };
-  saveTasks(tasks);
-  logActivity(id, note || 'updated assignment', actor);
-  return tasks[idx];
+async function updateTask(id, changes, actorId, note) {
+  const dbChanges = {};
+  if (changes.division !== undefined) dbChanges.division = changes.division;
+  if (changes.title !== undefined) dbChanges.title = changes.title;
+  if (changes.description !== undefined) dbChanges.description = changes.description;
+  if (changes.assignedTo !== undefined) dbChanges.assigned_to = changes.assignedTo;
+  if (changes.priority !== undefined) dbChanges.priority = changes.priority;
+  if (changes.status !== undefined) dbChanges.status = changes.status;
+  if (changes.startDate !== undefined) dbChanges.start_date = changes.startDate;
+  if (changes.dueDate !== undefined) dbChanges.due_date = changes.dueDate;
+  if (changes.estimatedTime !== undefined) dbChanges.estimated_time = changes.estimatedTime;
+  if (changes.progress !== undefined) dbChanges.progress = changes.progress;
+  if (changes.remarks !== undefined) dbChanges.remarks = changes.remarks;
+
+  const { data, error } = await sb.from('assignments').update(dbChanges).eq('id', id).select().single();
+  if (error) { console.error(error); return null; }
+
+  await logActivity(id, note || 'updated assignment', actorId);
+  return mapTask(data);
 }
 
-function deleteTask(id, actor) {
-  const tasks = getTasks();
-  const task = tasks.find(t => t.id === id);
-  const remaining = tasks.filter(t => t.id !== id);
-  saveTasks(remaining);
-  if (task) logActivity(id, `deleted assignment "${task.title}"`, actor);
+async function deleteTask(id, actorId) {
+  const { data: existing } = await sb.from('assignments').select('title').eq('id', id).single();
+  const { error } = await sb.from('assignments').delete().eq('id', id);
+  if (error) { console.error(error); return; }
+  if (existing) await logActivity(null, `deleted assignment "${existing.title}"`, actorId);
 }
 
-function addComment(id, user, text) {
-  const tasks = getTasks();
-  const idx = tasks.findIndex(t => t.id === id);
-  if (idx === -1) return null;
-  tasks[idx].comments = tasks[idx].comments || [];
-  tasks[idx].comments.push({ user, text, date: new Date().toISOString() });
-  saveTasks(tasks);
-  logActivity(id, 'added a comment', user);
-  return tasks[idx];
+async function getComments(taskId) {
+  const { data, error } = await sb.from('comments').select('*').eq('assignment_id', taskId).order('created_at');
+  if (error) { console.error(error); return []; }
+  return data;
 }
 
-function logActivity(taskId, action, user) {
-  const activities = getActivities();
-  activities.unshift({ id: Date.now() + Math.random(), taskId, action, user, timestamp: new Date().toISOString() });
-  localStorage.setItem(ACTIVITY_KEY, JSON.stringify(activities.slice(0, 100)));
+async function addComment(taskId, userId, text) {
+  const { error } = await sb.from('comments').insert({ assignment_id: taskId, user_id: userId, text });
+  if (error) { console.error(error); return; }
+  await logActivity(taskId, 'added a comment', userId);
 }
 
-function getActivities() {
-  return JSON.parse(localStorage.getItem(ACTIVITY_KEY) || '[]');
+async function logActivity(assignmentId, action, userId) {
+  const { error } = await sb.from('activity_log').insert({ assignment_id: assignmentId, action, user_id: userId });
+  if (error) console.error(error);
+}
+
+async function getActivities() {
+  const { data, error } = await sb.from('activity_log').select('*').order('created_at', { ascending: false }).limit(100);
+  if (error) { console.error(error); return []; }
+  return data;
 }
 
 function isOverdue(task) {
@@ -110,10 +113,18 @@ function isOverdue(task) {
   return due < today;
 }
 
-function exportTasksToCSV(tasks, filename) {
+// Looks up a display name from a profile id. Pure/sync: callers supply the
+// current user list (a fresh fetch, or a cache) — see ownerName usage in
+// dashboard.js, which keeps one around for the whole render pass.
+function ownerName(id, users) {
+  const user = (users || []).find(u => u.id === id);
+  return user ? user.name : '—';
+}
+
+function exportTasksToCSV(tasks, filename, users) {
   const headers = ['Division', 'Assignment', 'Owner', 'Status', 'Priority', 'Estimated Time', 'Start Date', 'Due Date', 'Progress'];
   const rows = tasks.map(t => [
-    t.division, t.title, ownerName(t.assignedTo), t.status, t.priority, t.estimatedTime, t.startDate, t.dueDate, `${t.progress}%`,
+    t.division, t.title, ownerName(t.assignedTo, users), t.status, t.priority, t.estimatedTime, t.startDate, t.dueDate, `${t.progress}%`,
   ]);
   const csv = [headers, ...rows]
     .map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
@@ -125,9 +136,4 @@ function exportTasksToCSV(tasks, filename) {
   a.download = filename || 'assignments.csv';
   a.click();
   URL.revokeObjectURL(url);
-}
-
-function ownerName(email) {
-  const user = getUsers().find(u => u.email === email);
-  return user ? user.name : email;
 }

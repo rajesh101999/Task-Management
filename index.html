@@ -32,6 +32,8 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabaseClient.js"></script>
 <script src="js/auth.js"></script>
 <script>
   redirectIfAuthed();
@@ -45,11 +47,14 @@
     btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
   });
 
-  document.getElementById('loginForm').addEventListener('submit', (e) => {
+  document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
-    const result = login(email, password);
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    const result = await login(email, password);
+    submitBtn.disabled = false;
     const box = document.getElementById('errorBox');
     if (!result.ok) {
       box.textContent = result.error;

@@ -1,11 +1,20 @@
-/* dashboard.js — renders the role-aware dashboard and wires up all UI actions */
+/* dashboard.js — renders the role-aware dashboard and wires up all UI actions.
+   Users/tasks/activity are fetched from Supabase once per refresh and cached
+   in the module-level variables below; renders read from that cache so
+   filtering/searching stays instant (no network round-trip per keystroke). */
 
-const session = requireAuth();
+let session = null;
+let allUsers = [];
+let allTasks = [];
+let allActivities = [];
 let activeTaskId = null;
 
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', boot);
 
-function init() {
+async function boot() {
+  session = await requireAuth();
+  if (!session) return; // requireAuth already redirected to index.html
+
   document.getElementById('userName').textContent = session.name;
   document.getElementById('userRole').textContent = session.role;
   document.getElementById('logoutBtn').addEventListener('click', logout);
@@ -33,7 +42,6 @@ function init() {
   fillOptions(document.getElementById('f_priority'), PRIORITIES, false);
   fillOptions(document.getElementById('f_status'), STATUSES, false);
   fillOptions(document.getElementById('detailStatus'), STATUSES, false);
-  fillEmployeeOptions();
 
   document.getElementById('filterStatus').addEventListener('change', renderAll);
   document.getElementById('filterPriority').addEventListener('change', renderAll);
@@ -51,6 +59,8 @@ function init() {
     btn.addEventListener('click', () => closeModal(btn.dataset.close));
   });
 
+  await refreshData();
+  fillEmployeeOptions();
   renderAll();
 }
 
@@ -67,19 +77,32 @@ function fillOptions(select, values, includeAll) {
 function fillEmployeeOptions() {
   const select = document.getElementById('f_assignedTo');
   select.innerHTML = '';
-  getEmployees().forEach(emp => {
+  allUsers.filter(u => u.role === 'Employee').forEach(emp => {
     const opt = document.createElement('option');
-    opt.value = emp.email;
+    opt.value = emp.id;
     opt.textContent = `${emp.name} (${emp.division})`;
     select.appendChild(opt);
   });
 }
 
+/* ---------- Fetch + cache ---------- */
+
+async function refreshData() {
+  [allUsers, allTasks, allActivities] = await Promise.all([getUsers(), getTasks(), getActivities()]);
+}
+
+async function refreshAndRender() {
+  await refreshData();
+  renderAll();
+}
+
 /* ---------- Data scoping ---------- */
 
+// Row Level Security already scopes `assignments` server-side (Managers see
+// all, Employees see only what's assigned to them), so allTasks is already
+// the right set — no client-side role filtering needed here.
 function visibleTasks() {
-  const all = getTasks();
-  return session.role === 'Manager' ? all : all.filter(t => t.assignedTo === session.email);
+  return allTasks;
 }
 
 function filteredTasks() {
@@ -90,7 +113,7 @@ function filteredTasks() {
   return visibleTasks().filter(t => {
     if (status && t.status !== status) return false;
     if (priority && t.priority !== priority) return false;
-    if (search && !`${t.title} ${t.division} ${ownerName(t.assignedTo)}`.toLowerCase().includes(search)) return false;
+    if (search && !`${t.title} ${t.division} ${ownerName(t.assignedTo, allUsers)}`.toLowerCase().includes(search)) return false;
     return true;
   });
 }
@@ -169,7 +192,7 @@ function renderTable() {
       <tr>
         <td>${escapeHtml(t.division)}</td>
         <td>${escapeHtml(t.title)}</td>
-        <td>${escapeHtml(ownerName(t.assignedTo))}</td>
+        <td>${escapeHtml(ownerName(t.assignedTo, allUsers))}</td>
         <td><span class="pill ${statusClass(t.status)}">${t.status}</span></td>
         <td><span class="pill ${statusClass(t.priority)}">${t.priority}</span></td>
         <td>${escapeHtml(t.estimatedTime || '—')}</td>
@@ -183,8 +206,7 @@ function renderTable() {
 }
 
 function renderWorkload() {
-  const employees = getEmployees();
-  const tasks = getTasks();
+  const employees = allUsers.filter(u => u.role === 'Employee');
   const body = document.getElementById('workloadBody');
 
   if (!employees.length) {
@@ -193,7 +215,7 @@ function renderWorkload() {
   }
 
   body.innerHTML = employees.map(emp => {
-    const count = tasks.filter(t => t.assignedTo === emp.email && !['Completed', 'Cancelled'].includes(t.status)).length;
+    const count = allTasks.filter(t => t.assignedTo === emp.id && !['Completed', 'Cancelled'].includes(t.status)).length;
     return `<div class="workload-item"><span>${escapeHtml(emp.name)}</span><strong>${count} active</strong></div>`;
   }).join('');
 }
@@ -202,8 +224,8 @@ function renderWorkload() {
 // Manager currently has open (assignments they created that aren't wrapped up).
 function activeCountFor(user, tasks) {
   return user.role === 'Manager'
-    ? tasks.filter(t => t.assignedBy === user.email && !['Completed', 'Cancelled'].includes(t.status)).length
-    : tasks.filter(t => t.assignedTo === user.email && !['Completed', 'Cancelled'].includes(t.status)).length;
+    ? tasks.filter(t => t.assignedBy === user.id && !['Completed', 'Cancelled'].includes(t.status)).length
+    : tasks.filter(t => t.assignedTo === user.id && !['Completed', 'Cancelled'].includes(t.status)).length;
 }
 
 function renderEmployees() {
@@ -212,8 +234,7 @@ function renderEmployees() {
   if (!tbody) return;
 
   const search = (document.getElementById('employeeSearch')?.value || '').trim().toLowerCase();
-  const tasks = getTasks();
-  const members = getUsers().filter(u =>
+  const members = allUsers.filter(u =>
     !search || `${u.name} ${u.email} ${u.employeeId} ${u.division} ${u.role}`.toLowerCase().includes(search)
   );
 
@@ -233,11 +254,11 @@ function renderEmployees() {
         <td>${escapeHtml(member.email)}</td>
         <td><span class="pill pill-role-${member.role}">${member.role}</span></td>
         <td>${escapeHtml(member.division)}</td>
-        <td>${activeCountFor(member, tasks)}</td>
+        <td>${activeCountFor(member, allTasks)}</td>
         <td>
           <div class="row-actions">
-            <button class="icon-btn" onclick="openEmployeeModal(${member.id})">Edit</button>
-            <button class="icon-btn" onclick="onDeleteEmployee(${member.id})" ${isSelf ? 'disabled title="You can\'t delete your own account"' : ''}>Delete</button>
+            <button class="icon-btn" onclick="openEmployeeModal('${member.id}')">Edit</button>
+            <button class="icon-btn" onclick="onDeleteEmployee('${member.id}')" ${isSelf ? 'disabled title="You can\'t delete your own account"' : ''}>Delete</button>
           </div>
         </td>
       </tr>
@@ -250,13 +271,15 @@ function openEmployeeModal(id) {
   form.reset();
   document.getElementById('e_id').value = '';
   document.getElementById('e_password').required = true;
+  document.getElementById('e_email').disabled = false;
+  document.getElementById('e_password').disabled = false;
 
   const roleRadios = document.querySelectorAll('input[name="e_role"]');
   roleRadios.forEach(r => { r.disabled = false; });
   document.getElementById('e_selfRoleHint').style.display = 'none';
 
   if (id) {
-    const member = findUserById(id);
+    const member = allUsers.find(u => u.id === id);
     if (!member) return;
     document.getElementById('employeeModalTitle').textContent = 'Edit Member';
     document.getElementById('e_id').value = member.id;
@@ -269,16 +292,26 @@ function openEmployeeModal(id) {
     document.getElementById('e_password').required = false;
     roleRadios.forEach(r => { r.checked = r.value === member.role; });
 
-    if (member.id === session.id) {
+    const isSelf = member.id === session.id;
+    if (isSelf) {
       // Editing yourself: keep everything editable except the role you're currently using.
       roleRadios.forEach(r => { r.disabled = true; });
       document.getElementById('e_selfRoleHint').style.display = 'block';
+      document.getElementById('employeeHint').textContent = "Share the email and password with them — they'll use them to sign in.";
+    } else {
+      // Editing someone else: Supabase Auth only allows a person to change
+      // their own email/password, so those two fields are locked here.
+      document.getElementById('e_email').disabled = true;
+      document.getElementById('e_password').disabled = true;
+      document.getElementById('e_password').placeholder = 'Only they can change this';
+      document.getElementById('employeeHint').textContent = 'Only this person can change their own email or password, from their own account.';
     }
   } else {
     document.getElementById('employeeModalTitle').textContent = 'Add Member';
     document.getElementById('e_employeeId').value = '';
     document.getElementById('e_division').value = session.division || '';
     document.getElementById('e_password').placeholder = 'Set a login password';
+    document.getElementById('employeeHint').textContent = "Share the email and password with them — they'll use them to sign in.";
     roleRadios.forEach(r => { r.checked = r.value === 'Employee'; });
     updateEmployeeIdPlaceholder();
   }
@@ -288,12 +321,13 @@ function openEmployeeModal(id) {
 
 function updateEmployeeIdPlaceholder() {
   const role = document.querySelector('input[name="e_role"]:checked').value;
-  document.getElementById('e_employeeId').placeholder = getNextUserId(role);
+  document.getElementById('e_employeeId').placeholder = getNextUserId(role, allUsers);
 }
 
-function onSaveEmployee(e) {
+async function onSaveEmployee(e) {
   e.preventDefault();
   const id = document.getElementById('e_id').value;
+  const isSelf = id === session.id;
   const payload = {
     employeeId: document.getElementById('e_employeeId').value.trim(),
     name: document.getElementById('e_name').value.trim(),
@@ -306,14 +340,15 @@ function onSaveEmployee(e) {
   let result;
   if (id) {
     if (!payload.employeeId) delete payload.employeeId; // keep existing ID if left blank
-    if (Number(id) === session.id) delete payload.role; // can't change your own role mid-session
-    result = updateUser(Number(id), payload);
+    if (isSelf) delete payload.role; // can't change your own role mid-session
+    if (!isSelf) { delete payload.email; delete payload.password; } // only the account owner can change these
+    result = await updateUser(id, payload, isSelf);
   } else {
     if (!payload.password) {
       showToast('Set a login password for this member.');
       return;
     }
-    result = addTeamMember(payload);
+    result = await addTeamMember(payload);
   }
 
   if (!result.ok) {
@@ -322,39 +357,37 @@ function onSaveEmployee(e) {
   }
 
   // If the manager just edited their own record, keep this tab's session and topbar in sync.
-  if (Number(id) === session.id) {
+  if (isSelf) {
     Object.assign(session, { name: result.user.name, email: result.user.email, division: result.user.division });
     document.getElementById('userName').textContent = session.name;
   }
 
   closeModal('employeeModalBackdrop');
+  await refreshAndRender();
   fillEmployeeOptions();
-  renderAll();
   showToast(id ? 'Member updated.' : `Member added — ID ${result.user.employeeId}.`);
 }
 
-function onDeleteEmployee(id) {
-  const member = findUserById(id);
+async function onDeleteEmployee(id) {
+  const member = allUsers.find(u => u.id === id);
   if (!member) return;
-  const tasks = getTasks();
-  const activeCount = activeCountFor(member, tasks);
+  const activeCount = activeCountFor(member, allTasks);
   const noun = member.role === 'Manager' ? 'open assignment(s) they created' : 'active assignment(s)';
   const warning = activeCount ? `${member.name} has ${activeCount} ${noun}. ` : '';
   if (!confirm(`${warning}Delete ${member.name}'s account? This cannot be undone.`)) return;
 
-  const result = deleteUser(id);
+  const result = await deleteUser(id, session.id);
   if (!result.ok) {
     showToast(result.error);
     return;
   }
+  await refreshAndRender();
   fillEmployeeOptions();
-  renderAll();
   showToast('Member removed.');
 }
 
 function renderActivity() {
-  const relevantIds = new Set(visibleTasks().map(t => t.id));
-  const activities = getActivities().filter(a => relevantIds.has(a.taskId)).slice(0, 12);
+  const activities = allActivities.slice(0, 12);
   const body = document.getElementById('activityBody');
 
   if (!activities.length) {
@@ -364,8 +397,8 @@ function renderActivity() {
 
   body.innerHTML = activities.map(a => `
     <div class="activity-item">
-      <div><strong>${escapeHtml(a.user)}</strong> ${escapeHtml(a.action)}</div>
-      <div class="activity-meta">${formatDateTime(a.timestamp)}</div>
+      <div><strong>${escapeHtml(ownerName(a.user_id, allUsers))}</strong> ${escapeHtml(a.action)}</div>
+      <div class="activity-meta">${formatDateTime(a.created_at)}</div>
     </div>
   `).join('');
 }
@@ -378,7 +411,8 @@ function openTaskModal(id) {
   document.getElementById('taskId').value = '';
 
   if (id) {
-    const task = getTask(id);
+    const task = allTasks.find(t => t.id === id);
+    if (!task) return;
     document.getElementById('taskModalTitle').textContent = 'Edit Assignment';
     document.getElementById('taskId').value = task.id;
     document.getElementById('f_division').value = task.division;
@@ -400,7 +434,7 @@ function openTaskModal(id) {
   openModal('taskModalBackdrop');
 }
 
-function onSaveTask(e) {
+async function onSaveTask(e) {
   e.preventDefault();
   const id = document.getElementById('taskId').value;
 
@@ -423,32 +457,32 @@ function onSaveTask(e) {
   }
 
   if (id) {
-    updateTask(Number(id), payload, session.name, `updated assignment "${payload.title}"`);
+    await updateTask(Number(id), payload, session.id, `updated assignment "${payload.title}"`);
     showToast('Assignment updated.');
   } else {
-    payload.assignedBy = session.email;
+    payload.assignedBy = session.id;
     payload.progress = 0;
-    createTask(payload, session.name);
+    await createTask(payload, session.id);
     showToast('Assignment created.');
   }
 
   closeModal('taskModalBackdrop');
-  renderAll();
+  await refreshAndRender();
 }
 
-function onDeleteTask(id) {
-  const task = getTask(id);
+async function onDeleteTask(id) {
+  const task = allTasks.find(t => t.id === id);
   if (!task) return;
   if (!confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
-  deleteTask(id, session.name);
-  renderAll();
+  await deleteTask(id, session.id);
+  await refreshAndRender();
   showToast('Assignment deleted.');
 }
 
 /* ---------- Detail modal ---------- */
 
-function openDetailModal(id) {
-  const task = getTask(id);
+async function openDetailModal(id) {
+  const task = allTasks.find(t => t.id === id);
   if (!task) return;
   activeTaskId = id;
 
@@ -456,8 +490,8 @@ function openDetailModal(id) {
   document.getElementById('detailDescription').textContent = task.description || 'No description provided.';
   document.getElementById('detailMeta').innerHTML = [
     ['Division', task.division],
-    ['Assigned By', ownerName(task.assignedBy)],
-    ['Assigned To', ownerName(task.assignedTo)],
+    ['Assigned By', ownerName(task.assignedBy, allUsers)],
+    ['Assigned To', ownerName(task.assignedTo, allUsers)],
     ['Priority', task.priority],
     ['Start Date', formatDate(task.startDate)],
     ['Due Date', formatDate(task.dueDate)],
@@ -469,49 +503,49 @@ function openDetailModal(id) {
   document.getElementById('detailProgress').value = task.progress;
   document.getElementById('progressValue').textContent = `${task.progress}%`;
 
-  renderComments(task);
+  renderComments(await getComments(id));
   openModal('detailModalBackdrop');
 }
 
-function renderComments(task) {
+function renderComments(comments) {
   const list = document.getElementById('commentList');
-  const comments = task.comments || [];
   list.innerHTML = comments.length
     ? comments.map(c => `
         <div class="comment-item">
-          <span class="who">${escapeHtml(c.user)}</span>
-          <span class="when">${formatDateTime(c.date)}</span>
+          <span class="who">${escapeHtml(ownerName(c.user_id, allUsers))}</span>
+          <span class="when">${formatDateTime(c.created_at)}</span>
           <div>${escapeHtml(c.text)}</div>
         </div>
       `).join('')
     : '<div class="empty-state">No comments yet.</div>';
 }
 
-function onSaveStatus() {
+async function onSaveStatus() {
   if (!activeTaskId) return;
   const status = document.getElementById('detailStatus').value;
   const progress = Number(document.getElementById('detailProgress').value);
   const changes = { status, progress: status === 'Completed' ? 100 : progress };
-  updateTask(activeTaskId, changes, session.name, `set status to "${status}" (${changes.progress}%)`);
-  renderAll();
+  await updateTask(activeTaskId, changes, session.id, `set status to "${status}" (${changes.progress}%)`);
+  await refreshAndRender();
   showToast('Status updated.');
 }
 
-function onAddComment() {
+async function onAddComment() {
   if (!activeTaskId) return;
   const input = document.getElementById('commentInput');
   const text = input.value.trim();
   if (!text) return;
-  const task = addComment(activeTaskId, session.name, text);
+  await addComment(activeTaskId, session.id, text);
   input.value = '';
-  renderComments(task);
+  renderComments(await getComments(activeTaskId));
+  await refreshData();
   renderActivity();
 }
 
 /* ---------- Export ---------- */
 
 function onExport() {
-  exportTasksToCSV(filteredTasks(), 'assignments.csv');
+  exportTasksToCSV(filteredTasks(), 'assignments.csv', allUsers);
 }
 
 /* ---------- Modal helpers ---------- */
