@@ -35,6 +35,8 @@ async function boot() {
   } else {
     document.getElementById('tableTitle').textContent = 'My Assignments';
     document.getElementById('workloadPanel').style.display = 'none';
+    document.getElementById('newTaskBtn').textContent = '+ Add My Task';
+    document.getElementById('newTaskBtn').style.display = 'inline-flex';
   }
 
   fillOptions(document.getElementById('filterStatus'), STATUSES, true);
@@ -182,11 +184,22 @@ function renderTable() {
 
   tbody.innerHTML = tasks.map(t => {
     const overdue = isOverdue(t);
-    const actions = session.role === 'Manager'
-      ? `<button class="icon-btn" onclick="openDetailModal(${t.id})">View</button>
+    // Employees can create tasks for themselves (t.assignedBy === them); those
+    // get the same Edit/Delete as a Manager gets. Manager-assigned work only
+    // ever gets "Update" (status/progress/comments via the detail modal).
+    const isOwnTask = session.role !== 'Manager' && t.assignedBy === session.id;
+    let actions;
+    if (session.role === 'Manager') {
+      actions = `<button class="icon-btn" onclick="openDetailModal(${t.id})">View</button>
          <button class="icon-btn" onclick="openTaskModal(${t.id})">Edit</button>
-         <button class="icon-btn" onclick="onDeleteTask(${t.id})">Delete</button>`
-      : `<button class="icon-btn" onclick="openDetailModal(${t.id})">Update</button>`;
+         <button class="icon-btn" onclick="onDeleteTask(${t.id})">Delete</button>`;
+    } else if (isOwnTask) {
+      actions = `<button class="icon-btn" onclick="openDetailModal(${t.id})">Update</button>
+         <button class="icon-btn" onclick="openTaskModal(${t.id})">Edit</button>
+         <button class="icon-btn" onclick="onDeleteTask(${t.id})">Delete</button>`;
+    } else {
+      actions = `<button class="icon-btn" onclick="openDetailModal(${t.id})">Update</button>`;
+    }
 
     return `
       <tr>
@@ -409,6 +422,9 @@ function openTaskModal(id) {
   const form = document.getElementById('taskForm');
   form.reset();
   document.getElementById('taskId').value = '';
+  const assignedToSelect = document.getElementById('f_assignedTo');
+  const assignedToLabel = document.querySelector('label[for="f_assignedTo"]');
+  const isManager = session.role === 'Manager';
 
   if (id) {
     const task = allTasks.find(t => t.id === id);
@@ -419,17 +435,23 @@ function openTaskModal(id) {
     document.getElementById('f_priority').value = task.priority;
     document.getElementById('f_title').value = task.title;
     document.getElementById('f_description').value = task.description || '';
-    document.getElementById('f_assignedTo').value = task.assignedTo;
+    assignedToSelect.value = task.assignedTo;
     document.getElementById('f_startDate').value = task.startDate;
     document.getElementById('f_dueDate').value = task.dueDate;
     document.getElementById('f_estimatedTime').value = task.estimatedTime || '';
     document.getElementById('f_status').value = task.status;
     document.getElementById('f_remarks').value = task.remarks || '';
   } else {
-    document.getElementById('taskModalTitle').textContent = 'New Assignment';
+    document.getElementById('taskModalTitle').textContent = isManager ? 'New Assignment' : 'New Task';
     document.getElementById('f_division').value = session.division || '';
     document.getElementById('f_status').value = 'Pending';
   }
+
+  // Employees can only ever create/keep tasks assigned to themselves — they
+  // can't hand work to (or take work from) someone else via this form.
+  assignedToLabel.textContent = isManager ? 'Assigned Employee' : 'Assigned To';
+  assignedToSelect.disabled = !isManager;
+  if (!isManager) assignedToSelect.value = session.id;
 
   openModal('taskModalBackdrop');
 }
@@ -443,7 +465,7 @@ async function onSaveTask(e) {
     priority: document.getElementById('f_priority').value,
     title: document.getElementById('f_title').value.trim(),
     description: document.getElementById('f_description').value.trim(),
-    assignedTo: document.getElementById('f_assignedTo').value,
+    assignedTo: session.role === 'Manager' ? document.getElementById('f_assignedTo').value : session.id,
     startDate: document.getElementById('f_startDate').value,
     dueDate: document.getElementById('f_dueDate').value,
     estimatedTime: document.getElementById('f_estimatedTime').value.trim(),
