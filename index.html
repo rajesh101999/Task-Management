@@ -22,7 +22,10 @@
       </div>
       <div class="field">
         <label for="password">Password</label>
-        <input type="password" id="password" required autocomplete="current-password" placeholder="••••••••">
+        <div class="password-wrap">
+          <input type="password" id="password" required autocomplete="current-password" placeholder="••••••••">
+          <button type="button" class="toggle-password" id="togglePassword" aria-label="Show password">👁</button>
+        </div>
       </div>
       <button type="submit" class="btn btn-primary btn-block">Sign In</button>
     </form>
@@ -32,6 +35,15 @@
 <script src="js/auth.js"></script>
 <script>
   redirectIfAuthed();
+
+  document.getElementById('togglePassword').addEventListener('click', () => {
+    const pwd = document.getElementById('password');
+    const btn = document.getElementById('togglePassword');
+    const showing = pwd.type === 'text';
+    pwd.type = showing ? 'password' : 'text';
+    btn.textContent = showing ? '👁' : '🙈';
+    btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+  });
 
   document.getElementById('loginForm').addEventListener('submit', (e) => {
     e.preventDefault();
