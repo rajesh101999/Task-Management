@@ -123,19 +123,20 @@ function ownerName(id, users) {
   return user ? user.name : '—';
 }
 
-function exportTasksToCSV(tasks, filename, users) {
-  const headers = ['Division', 'Assignment', 'Owner', 'Status', 'Priority', 'Estimated Time', 'Start Date', 'Due Date', 'Progress'];
-  const rows = tasks.map(t => [
-    t.division, t.title, ownerName(t.assignedTo, users), t.status, t.priority, t.estimatedTime, t.startDate, t.dueDate, `${t.progress}%`,
-  ]);
-  const csv = [headers, ...rows]
-    .map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename || 'assignments.csv';
-  a.click();
-  URL.revokeObjectURL(url);
+function exportTasksToExcel(tasks, filename, users) {
+  const rows = tasks.map(t => ({
+    Division: t.division,
+    Assignment: t.title,
+    Owner: ownerName(t.assignedTo, users),
+    Status: t.status,
+    Priority: t.priority,
+    'Estimated Time': t.estimatedTime,
+    'Start Date': t.startDate,
+    'Due Date': t.dueDate,
+    Progress: `${t.progress}%`,
+  }));
+  const sheet = XLSX.utils.json_to_sheet(rows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Assignments');
+  XLSX.writeFile(workbook, filename || 'assignments.xlsx');
 }

@@ -8,21 +8,31 @@
 </head>
 <body>
 
-<div class="topbar">
-  <div class="brand"><img src="assets/logo.png" alt="Cranes Varsity" class="topbar-logo"> Task Manager</div>
+<header class="top-header">
+  <div class="brand"><img src="assets/logo.png" alt="Cranes Varsity" class="header-logo"> Task Manager</div>
   <div class="user-info">
     <span id="userName"></span>
     <span id="userRole" class="badge-role"></span>
     <button class="btn btn-secondary btn-sm" id="logoutBtn">Log Out</button>
   </div>
-</div>
+</header>
 
-<div class="container">
+<div class="app-shell">
+  <aside class="sidebar">
+    <nav class="sidebar-nav" id="tabBar">
+      <button type="button" class="nav-item active" data-tab="assignmentsView">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>
+        Assignments
+      </button>
+      <button type="button" class="nav-item" id="teamNavItem" data-tab="employeesView" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Team
+      </button>
+    </nav>
+  </aside>
 
-  <div class="tabs" id="tabBar" style="display:none;">
-    <button type="button" class="tab-btn active" data-tab="assignmentsView">Assignments</button>
-    <button type="button" class="tab-btn" data-tab="employeesView">Team</button>
-  </div>
+  <main class="main-area">
+  <div class="container">
 
   <div id="assignmentsView">
     <div class="kpi-grid" id="kpiGrid"></div>
@@ -39,7 +49,7 @@
               <option value="">All Priorities</option>
             </select>
             <input type="text" id="filterSearch" placeholder="Search...">
-            <button class="btn btn-secondary btn-sm" id="exportBtn">Export CSV</button>
+            <button class="btn btn-secondary btn-sm" id="exportBtn">Export Excel</button>
             <button class="btn btn-primary btn-sm" id="newTaskBtn" style="display:none;">+ New Assignment</button>
           </div>
         </div>
@@ -106,6 +116,9 @@
       </div>
     </div>
   </div>
+
+  </div>
+  </main>
 </div>
 
 <!-- Create / Edit Assignment Modal -->
@@ -264,6 +277,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="js/supabaseClient.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/data.js"></script>

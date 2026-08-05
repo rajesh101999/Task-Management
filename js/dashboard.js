@@ -19,13 +19,14 @@ async function boot() {
   document.getElementById('userRole').textContent = session.role;
   document.getElementById('logoutBtn').addEventListener('click', logout);
 
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
   if (session.role === 'Manager') {
     document.getElementById('newTaskBtn').style.display = 'inline-flex';
     document.getElementById('tableTitle').textContent = 'All Assignments';
-    document.getElementById('tabBar').style.display = 'flex';
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-    });
+    document.getElementById('teamNavItem').style.display = 'flex';
     document.getElementById('newEmployeeBtn').addEventListener('click', () => openEmployeeModal());
     document.getElementById('employeeForm').addEventListener('submit', onSaveEmployee);
     document.getElementById('employeeSearch').addEventListener('input', renderEmployees);
@@ -135,12 +136,20 @@ function renderAll() {
 /* ---------- Tabs ---------- */
 
 function switchTab(tabId) {
-  document.querySelectorAll('.tab-btn').forEach(btn => {
+  document.querySelectorAll('.nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tabId);
   });
   document.getElementById('assignmentsView').style.display = tabId === 'assignmentsView' ? 'block' : 'none';
   document.getElementById('employeesView').style.display = tabId === 'employeesView' ? 'block' : 'none';
 }
+
+const KPI_ICONS = {
+  total: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>',
+  pending: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+  progress: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>',
+  completed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+  overdue: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+};
 
 function renderKPIs() {
   const tasks = visibleTasks();
@@ -151,15 +160,16 @@ function renderKPIs() {
   const overdue = tasks.filter(isOverdue).length;
 
   const cards = [
-    ['accent-total', total, 'Total Tasks'],
-    ['accent-pending', pending, 'Pending'],
-    ['accent-progress', inProgress, 'In Progress'],
-    ['accent-completed', completed, 'Completed'],
-    ['accent-overdue', overdue, 'Overdue'],
+    ['accent-total', total, 'Total Tasks', KPI_ICONS.total],
+    ['accent-pending', pending, 'Pending', KPI_ICONS.pending],
+    ['accent-progress', inProgress, 'In Progress', KPI_ICONS.progress],
+    ['accent-completed', completed, 'Completed', KPI_ICONS.completed],
+    ['accent-overdue', overdue, 'Overdue', KPI_ICONS.overdue],
   ];
 
-  document.getElementById('kpiGrid').innerHTML = cards.map(([cls, val, label]) => `
+  document.getElementById('kpiGrid').innerHTML = cards.map(([cls, val, label, icon]) => `
     <div class="kpi-card ${cls}">
+      <div class="kpi-icon">${icon}</div>
       <div class="kpi-value">${val}</div>
       <div class="kpi-label">${label}</div>
     </div>
@@ -584,7 +594,7 @@ async function onAddComment() {
 /* ---------- Export ---------- */
 
 function onExport() {
-  exportTasksToCSV(filteredTasks(), 'assignments.csv', allUsers);
+  exportTasksToExcel(filteredTasks(), 'assignments.xlsx', allUsers);
 }
 
 /* ---------- Modal helpers ---------- */
