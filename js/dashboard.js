@@ -478,25 +478,34 @@ async function onSaveTask(e) {
     return;
   }
 
+  let result;
   if (id) {
-    await updateTask(Number(id), payload, session.id, `updated assignment "${payload.title}"`);
-    showToast('Assignment updated.');
+    result = await updateTask(Number(id), payload, session.id, `updated assignment "${payload.title}"`);
   } else {
     payload.assignedBy = session.id;
     payload.progress = 0;
-    await createTask(payload, session.id);
-    showToast('Assignment created.');
+    result = await createTask(payload, session.id);
+  }
+
+  if (!result.ok) {
+    showToast(result.error || 'Could not save the assignment.');
+    return;
   }
 
   closeModal('taskModalBackdrop');
   await refreshAndRender();
+  showToast(id ? 'Assignment updated.' : 'Assignment created.');
 }
 
 async function onDeleteTask(id) {
   const task = allTasks.find(t => t.id === id);
   if (!task) return;
   if (!confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
-  await deleteTask(id, session.id);
+  const result = await deleteTask(id, session.id);
+  if (!result.ok) {
+    showToast(result.error || 'Could not delete the assignment.');
+    return;
+  }
   await refreshAndRender();
   showToast('Assignment deleted.');
 }
@@ -547,7 +556,11 @@ async function onSaveStatus() {
   const status = document.getElementById('detailStatus').value;
   const progress = Number(document.getElementById('detailProgress').value);
   const changes = { status, progress: status === 'Completed' ? 100 : progress };
-  await updateTask(activeTaskId, changes, session.id, `set status to "${status}" (${changes.progress}%)`);
+  const result = await updateTask(activeTaskId, changes, session.id, `set status to "${status}" (${changes.progress}%)`);
+  if (!result.ok) {
+    showToast(result.error || 'Could not update status.');
+    return;
+  }
   await refreshAndRender();
   showToast('Status updated.');
 }
@@ -557,7 +570,11 @@ async function onAddComment() {
   const input = document.getElementById('commentInput');
   const text = input.value.trim();
   if (!text) return;
-  await addComment(activeTaskId, session.id, text);
+  const result = await addComment(activeTaskId, session.id, text);
+  if (!result.ok) {
+    showToast(result.error || 'Could not add the comment.');
+    return;
+  }
   input.value = '';
   renderComments(await getComments(activeTaskId));
   await refreshData();

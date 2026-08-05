@@ -47,11 +47,11 @@ async function createTask(task, actorId) {
     progress: task.progress || 0,
     remarks: task.remarks || '',
   }).select().single();
-  if (error) { console.error(error); return null; }
+  if (error) { console.error(error); return { ok: false, error: error.message }; }
 
   const newTask = mapTask(data);
   await logActivity(newTask.id, `created assignment "${newTask.title}"`, actorId);
-  return newTask;
+  return { ok: true, task: newTask };
 }
 
 async function updateTask(id, changes, actorId, note) {
@@ -69,17 +69,18 @@ async function updateTask(id, changes, actorId, note) {
   if (changes.remarks !== undefined) dbChanges.remarks = changes.remarks;
 
   const { data, error } = await sb.from('assignments').update(dbChanges).eq('id', id).select().single();
-  if (error) { console.error(error); return null; }
+  if (error) { console.error(error); return { ok: false, error: error.message }; }
 
   await logActivity(id, note || 'updated assignment', actorId);
-  return mapTask(data);
+  return { ok: true, task: mapTask(data) };
 }
 
 async function deleteTask(id, actorId) {
   const { data: existing } = await sb.from('assignments').select('title').eq('id', id).single();
   const { error } = await sb.from('assignments').delete().eq('id', id);
-  if (error) { console.error(error); return; }
+  if (error) { console.error(error); return { ok: false, error: error.message }; }
   if (existing) await logActivity(null, `deleted assignment "${existing.title}"`, actorId);
+  return { ok: true };
 }
 
 async function getComments(taskId) {
@@ -90,8 +91,9 @@ async function getComments(taskId) {
 
 async function addComment(taskId, userId, text) {
   const { error } = await sb.from('comments').insert({ assignment_id: taskId, user_id: userId, text });
-  if (error) { console.error(error); return; }
+  if (error) { console.error(error); return { ok: false, error: error.message }; }
   await logActivity(taskId, 'added a comment', userId);
+  return { ok: true };
 }
 
 async function logActivity(assignmentId, action, userId) {
