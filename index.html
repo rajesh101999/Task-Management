@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In · Task Manager</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <img src="assets/logo.png" alt="Cranes Varsity" class="auth-logo">
+    <h1>Task Manager</h1>
+    <p class="sub">Sign in to continue</p>
+
+    <div id="errorBox" class="error-msg" style="display:none;"></div>
+
+    <form id="loginForm">
+      <div class="field">
+        <label for="email">Email</label>
+        <input type="email" id="email" required autocomplete="username" placeholder="you@company.com">
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" required autocomplete="current-password" placeholder="••••••••">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+    </form>
+  </div>
+</div>
+
+<script src="js/auth.js"></script>
+<script>
+  redirectIfAuthed();
+
+  document.getElementById('loginForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const result = login(email, password);
+    const box = document.getElementById('errorBox');
+    if (!result.ok) {
+      box.textContent = result.error;
+      box.style.display = 'block';
+      return;
+    }
+    window.location.href = 'dashboard.html';
+  });
+</script>
+</body>
+</html>

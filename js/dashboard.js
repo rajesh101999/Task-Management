@@ -1,0 +1,549 @@
+/* dashboard.js — renders the role-aware dashboard and wires up all UI actions */
+
+const session = requireAuth();
+let activeTaskId = null;
+
+document.addEventListener('DOMContentLoaded', init);
+
+function init() {
+  document.getElementById('userName').textContent = session.name;
+  document.getElementById('userRole').textContent = session.role;
+  document.getElementById('logoutBtn').addEventListener('click', logout);
+
+  if (session.role === 'Manager') {
+    document.getElementById('newTaskBtn').style.display = 'inline-flex';
+    document.getElementById('tableTitle').textContent = 'All Assignments';
+    document.getElementById('tabBar').style.display = 'flex';
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
+    document.getElementById('newEmployeeBtn').addEventListener('click', () => openEmployeeModal());
+    document.getElementById('employeeForm').addEventListener('submit', onSaveEmployee);
+    document.getElementById('employeeSearch').addEventListener('input', renderEmployees);
+    document.querySelectorAll('input[name="e_role"]').forEach(r => {
+      r.addEventListener('change', updateEmployeeIdPlaceholder);
+    });
+  } else {
+    document.getElementById('tableTitle').textContent = 'My Assignments';
+    document.getElementById('workloadPanel').style.display = 'none';
+  }
+
+  fillOptions(document.getElementById('filterStatus'), STATUSES, true);
+  fillOptions(document.getElementById('filterPriority'), PRIORITIES, true);
+  fillOptions(document.getElementById('f_priority'), PRIORITIES, false);
+  fillOptions(document.getElementById('f_status'), STATUSES, false);
+  fillOptions(document.getElementById('detailStatus'), STATUSES, false);
+  fillEmployeeOptions();
+
+  document.getElementById('filterStatus').addEventListener('change', renderAll);
+  document.getElementById('filterPriority').addEventListener('change', renderAll);
+  document.getElementById('filterSearch').addEventListener('input', renderAll);
+  document.getElementById('exportBtn').addEventListener('click', onExport);
+  document.getElementById('newTaskBtn').addEventListener('click', () => openTaskModal());
+  document.getElementById('taskForm').addEventListener('submit', onSaveTask);
+  document.getElementById('saveStatusBtn').addEventListener('click', onSaveStatus);
+  document.getElementById('addCommentBtn').addEventListener('click', onAddComment);
+  document.getElementById('detailProgress').addEventListener('input', (e) => {
+    document.getElementById('progressValue').textContent = `${e.target.value}%`;
+  });
+
+  document.querySelectorAll('[data-close]').forEach(btn => {
+    btn.addEventListener('click', () => closeModal(btn.dataset.close));
+  });
+
+  renderAll();
+}
+
+function fillOptions(select, values, includeAll) {
+  select.innerHTML = includeAll ? select.innerHTML : '';
+  values.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v;
+    select.appendChild(opt);
+  });
+}
+
+function fillEmployeeOptions() {
+  const select = document.getElementById('f_assignedTo');
+  select.innerHTML = '';
+  getEmployees().forEach(emp => {
+    const opt = document.createElement('option');
+    opt.value = emp.email;
+    opt.textContent = `${emp.name} (${emp.division})`;
+    select.appendChild(opt);
+  });
+}
+
+/* ---------- Data scoping ---------- */
+
+function visibleTasks() {
+  const all = getTasks();
+  return session.role === 'Manager' ? all : all.filter(t => t.assignedTo === session.email);
+}
+
+function filteredTasks() {
+  const status = document.getElementById('filterStatus').value;
+  const priority = document.getElementById('filterPriority').value;
+  const search = document.getElementById('filterSearch').value.trim().toLowerCase();
+
+  return visibleTasks().filter(t => {
+    if (status && t.status !== status) return false;
+    if (priority && t.priority !== priority) return false;
+    if (search && !`${t.title} ${t.division} ${ownerName(t.assignedTo)}`.toLowerCase().includes(search)) return false;
+    return true;
+  });
+}
+
+/* ---------- Render ---------- */
+
+function renderAll() {
+  renderKPIs();
+  renderTable();
+  if (session.role === 'Manager') {
+    renderWorkload();
+    renderEmployees();
+  }
+  renderActivity();
+}
+
+/* ---------- Tabs ---------- */
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabId);
+  });
+  document.getElementById('assignmentsView').style.display = tabId === 'assignmentsView' ? 'block' : 'none';
+  document.getElementById('employeesView').style.display = tabId === 'employeesView' ? 'block' : 'none';
+}
+
+function renderKPIs() {
+  const tasks = visibleTasks();
+  const total = tasks.length;
+  const pending = tasks.filter(t => t.status === 'Pending').length;
+  const inProgress = tasks.filter(t => t.status === 'In Progress' || t.status === 'Accepted').length;
+  const completed = tasks.filter(t => t.status === 'Completed').length;
+  const overdue = tasks.filter(isOverdue).length;
+
+  const cards = [
+    ['accent-total', total, 'Total Tasks'],
+    ['accent-pending', pending, 'Pending'],
+    ['accent-progress', inProgress, 'In Progress'],
+    ['accent-completed', completed, 'Completed'],
+    ['accent-overdue', overdue, 'Overdue'],
+  ];
+
+  document.getElementById('kpiGrid').innerHTML = cards.map(([cls, val, label]) => `
+    <div class="kpi-card ${cls}">
+      <div class="kpi-value">${val}</div>
+      <div class="kpi-label">${label}</div>
+    </div>
+  `).join('');
+}
+
+function statusClass(status) {
+  return 'pill-' + status.replace(/\s+/g, '');
+}
+
+function renderTable() {
+  const tasks = filteredTasks().sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const tbody = document.getElementById('taskTableBody');
+  const empty = document.getElementById('emptyState');
+
+  if (!tasks.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = tasks.map(t => {
+    const overdue = isOverdue(t);
+    const actions = session.role === 'Manager'
+      ? `<button class="icon-btn" onclick="openDetailModal(${t.id})">View</button>
+         <button class="icon-btn" onclick="openTaskModal(${t.id})">Edit</button>
+         <button class="icon-btn" onclick="onDeleteTask(${t.id})">Delete</button>`
+      : `<button class="icon-btn" onclick="openDetailModal(${t.id})">Update</button>`;
+
+    return `
+      <tr>
+        <td>${escapeHtml(t.division)}</td>
+        <td>${escapeHtml(t.title)}</td>
+        <td>${escapeHtml(ownerName(t.assignedTo))}</td>
+        <td><span class="pill ${statusClass(t.status)}">${t.status}</span></td>
+        <td><span class="pill ${statusClass(t.priority)}">${t.priority}</span></td>
+        <td>${escapeHtml(t.estimatedTime || '—')}</td>
+        <td>${formatDate(t.startDate)}</td>
+        <td class="${overdue ? 'overdue-text' : ''}">${formatDate(t.dueDate)}${overdue ? ' ⚠' : ''}</td>
+        <td><span class="progress-bar"><span style="width:${t.progress}%"></span></span>${t.progress}%</td>
+        <td><div class="row-actions">${actions}</div></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderWorkload() {
+  const employees = getEmployees();
+  const tasks = getTasks();
+  const body = document.getElementById('workloadBody');
+
+  if (!employees.length) {
+    body.innerHTML = '<div class="empty-state">No employees yet.</div>';
+    return;
+  }
+
+  body.innerHTML = employees.map(emp => {
+    const count = tasks.filter(t => t.assignedTo === emp.email && !['Completed', 'Cancelled'].includes(t.status)).length;
+    return `<div class="workload-item"><span>${escapeHtml(emp.name)}</span><strong>${count} active</strong></div>`;
+  }).join('');
+}
+
+// Active-work count shown per row: what an Employee is doing, or what a
+// Manager currently has open (assignments they created that aren't wrapped up).
+function activeCountFor(user, tasks) {
+  return user.role === 'Manager'
+    ? tasks.filter(t => t.assignedBy === user.email && !['Completed', 'Cancelled'].includes(t.status)).length
+    : tasks.filter(t => t.assignedTo === user.email && !['Completed', 'Cancelled'].includes(t.status)).length;
+}
+
+function renderEmployees() {
+  const tbody = document.getElementById('employeeTableBody');
+  const empty = document.getElementById('employeeEmptyState');
+  if (!tbody) return;
+
+  const search = (document.getElementById('employeeSearch')?.value || '').trim().toLowerCase();
+  const tasks = getTasks();
+  const members = getUsers().filter(u =>
+    !search || `${u.name} ${u.email} ${u.employeeId} ${u.division} ${u.role}`.toLowerCase().includes(search)
+  );
+
+  if (!members.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = members.map(member => {
+    const isSelf = member.id === session.id;
+    return `
+      <tr>
+        <td>${escapeHtml(member.employeeId || '—')}</td>
+        <td>${escapeHtml(member.name)}${isSelf ? ' <span style="color:var(--text-muted);font-size:11px;">(you)</span>' : ''}</td>
+        <td>${escapeHtml(member.email)}</td>
+        <td><span class="pill pill-role-${member.role}">${member.role}</span></td>
+        <td>${escapeHtml(member.division)}</td>
+        <td>${activeCountFor(member, tasks)}</td>
+        <td>
+          <div class="row-actions">
+            <button class="icon-btn" onclick="openEmployeeModal(${member.id})">Edit</button>
+            <button class="icon-btn" onclick="onDeleteEmployee(${member.id})" ${isSelf ? 'disabled title="You can\'t delete your own account"' : ''}>Delete</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function openEmployeeModal(id) {
+  const form = document.getElementById('employeeForm');
+  form.reset();
+  document.getElementById('e_id').value = '';
+  document.getElementById('e_password').required = true;
+
+  const roleRadios = document.querySelectorAll('input[name="e_role"]');
+  roleRadios.forEach(r => { r.disabled = false; });
+  document.getElementById('e_selfRoleHint').style.display = 'none';
+
+  if (id) {
+    const member = findUserById(id);
+    if (!member) return;
+    document.getElementById('employeeModalTitle').textContent = 'Edit Member';
+    document.getElementById('e_id').value = member.id;
+    document.getElementById('e_employeeId').value = member.employeeId || '';
+    document.getElementById('e_division').value = member.division;
+    document.getElementById('e_name').value = member.name;
+    document.getElementById('e_email').value = member.email;
+    document.getElementById('e_password').value = '';
+    document.getElementById('e_password').placeholder = 'Leave blank to keep unchanged';
+    document.getElementById('e_password').required = false;
+    roleRadios.forEach(r => { r.checked = r.value === member.role; });
+
+    if (member.id === session.id) {
+      // Editing yourself: keep everything editable except the role you're currently using.
+      roleRadios.forEach(r => { r.disabled = true; });
+      document.getElementById('e_selfRoleHint').style.display = 'block';
+    }
+  } else {
+    document.getElementById('employeeModalTitle').textContent = 'Add Member';
+    document.getElementById('e_employeeId').value = '';
+    document.getElementById('e_division').value = session.division || '';
+    document.getElementById('e_password').placeholder = 'Set a login password';
+    roleRadios.forEach(r => { r.checked = r.value === 'Employee'; });
+    updateEmployeeIdPlaceholder();
+  }
+
+  openModal('employeeModalBackdrop');
+}
+
+function updateEmployeeIdPlaceholder() {
+  const role = document.querySelector('input[name="e_role"]:checked').value;
+  document.getElementById('e_employeeId').placeholder = getNextUserId(role);
+}
+
+function onSaveEmployee(e) {
+  e.preventDefault();
+  const id = document.getElementById('e_id').value;
+  const payload = {
+    employeeId: document.getElementById('e_employeeId').value.trim(),
+    name: document.getElementById('e_name').value.trim(),
+    email: document.getElementById('e_email').value.trim(),
+    division: document.getElementById('e_division').value.trim(),
+    password: document.getElementById('e_password').value,
+    role: document.querySelector('input[name="e_role"]:checked').value,
+  };
+
+  let result;
+  if (id) {
+    if (!payload.employeeId) delete payload.employeeId; // keep existing ID if left blank
+    if (Number(id) === session.id) delete payload.role; // can't change your own role mid-session
+    result = updateUser(Number(id), payload);
+  } else {
+    if (!payload.password) {
+      showToast('Set a login password for this member.');
+      return;
+    }
+    result = addTeamMember(payload);
+  }
+
+  if (!result.ok) {
+    showToast(result.error);
+    return;
+  }
+
+  // If the manager just edited their own record, keep this tab's session and topbar in sync.
+  if (Number(id) === session.id) {
+    Object.assign(session, { name: result.user.name, email: result.user.email, division: result.user.division });
+    document.getElementById('userName').textContent = session.name;
+  }
+
+  closeModal('employeeModalBackdrop');
+  fillEmployeeOptions();
+  renderAll();
+  showToast(id ? 'Member updated.' : `Member added — ID ${result.user.employeeId}.`);
+}
+
+function onDeleteEmployee(id) {
+  const member = findUserById(id);
+  if (!member) return;
+  const tasks = getTasks();
+  const activeCount = activeCountFor(member, tasks);
+  const noun = member.role === 'Manager' ? 'open assignment(s) they created' : 'active assignment(s)';
+  const warning = activeCount ? `${member.name} has ${activeCount} ${noun}. ` : '';
+  if (!confirm(`${warning}Delete ${member.name}'s account? This cannot be undone.`)) return;
+
+  const result = deleteUser(id);
+  if (!result.ok) {
+    showToast(result.error);
+    return;
+  }
+  fillEmployeeOptions();
+  renderAll();
+  showToast('Member removed.');
+}
+
+function renderActivity() {
+  const relevantIds = new Set(visibleTasks().map(t => t.id));
+  const activities = getActivities().filter(a => relevantIds.has(a.taskId)).slice(0, 12);
+  const body = document.getElementById('activityBody');
+
+  if (!activities.length) {
+    body.innerHTML = '<div class="empty-state">No recent activity.</div>';
+    return;
+  }
+
+  body.innerHTML = activities.map(a => `
+    <div class="activity-item">
+      <div><strong>${escapeHtml(a.user)}</strong> ${escapeHtml(a.action)}</div>
+      <div class="activity-meta">${formatDateTime(a.timestamp)}</div>
+    </div>
+  `).join('');
+}
+
+/* ---------- Create / Edit modal ---------- */
+
+function openTaskModal(id) {
+  const form = document.getElementById('taskForm');
+  form.reset();
+  document.getElementById('taskId').value = '';
+
+  if (id) {
+    const task = getTask(id);
+    document.getElementById('taskModalTitle').textContent = 'Edit Assignment';
+    document.getElementById('taskId').value = task.id;
+    document.getElementById('f_division').value = task.division;
+    document.getElementById('f_priority').value = task.priority;
+    document.getElementById('f_title').value = task.title;
+    document.getElementById('f_description').value = task.description || '';
+    document.getElementById('f_assignedTo').value = task.assignedTo;
+    document.getElementById('f_startDate').value = task.startDate;
+    document.getElementById('f_dueDate').value = task.dueDate;
+    document.getElementById('f_estimatedTime').value = task.estimatedTime || '';
+    document.getElementById('f_status').value = task.status;
+    document.getElementById('f_remarks').value = task.remarks || '';
+  } else {
+    document.getElementById('taskModalTitle').textContent = 'New Assignment';
+    document.getElementById('f_division').value = session.division || '';
+    document.getElementById('f_status').value = 'Pending';
+  }
+
+  openModal('taskModalBackdrop');
+}
+
+function onSaveTask(e) {
+  e.preventDefault();
+  const id = document.getElementById('taskId').value;
+
+  const payload = {
+    division: document.getElementById('f_division').value.trim(),
+    priority: document.getElementById('f_priority').value,
+    title: document.getElementById('f_title').value.trim(),
+    description: document.getElementById('f_description').value.trim(),
+    assignedTo: document.getElementById('f_assignedTo').value,
+    startDate: document.getElementById('f_startDate').value,
+    dueDate: document.getElementById('f_dueDate').value,
+    estimatedTime: document.getElementById('f_estimatedTime').value.trim(),
+    status: document.getElementById('f_status').value,
+    remarks: document.getElementById('f_remarks').value.trim(),
+  };
+
+  if (new Date(payload.dueDate) < new Date(payload.startDate)) {
+    showToast('Due date cannot be before the start date.');
+    return;
+  }
+
+  if (id) {
+    updateTask(Number(id), payload, session.name, `updated assignment "${payload.title}"`);
+    showToast('Assignment updated.');
+  } else {
+    payload.assignedBy = session.email;
+    payload.progress = 0;
+    createTask(payload, session.name);
+    showToast('Assignment created.');
+  }
+
+  closeModal('taskModalBackdrop');
+  renderAll();
+}
+
+function onDeleteTask(id) {
+  const task = getTask(id);
+  if (!task) return;
+  if (!confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
+  deleteTask(id, session.name);
+  renderAll();
+  showToast('Assignment deleted.');
+}
+
+/* ---------- Detail modal ---------- */
+
+function openDetailModal(id) {
+  const task = getTask(id);
+  if (!task) return;
+  activeTaskId = id;
+
+  document.getElementById('detailTitle').textContent = task.title;
+  document.getElementById('detailDescription').textContent = task.description || 'No description provided.';
+  document.getElementById('detailMeta').innerHTML = [
+    ['Division', task.division],
+    ['Assigned By', ownerName(task.assignedBy)],
+    ['Assigned To', ownerName(task.assignedTo)],
+    ['Priority', task.priority],
+    ['Start Date', formatDate(task.startDate)],
+    ['Due Date', formatDate(task.dueDate)],
+    ['Estimated Time', task.estimatedTime || '—'],
+    ['Remarks', task.remarks || '—'],
+  ].map(([k, v]) => `<div class="detail-row"><span class="k">${k}</span><span class="v">${escapeHtml(String(v))}</span></div>`).join('');
+
+  document.getElementById('detailStatus').value = task.status;
+  document.getElementById('detailProgress').value = task.progress;
+  document.getElementById('progressValue').textContent = `${task.progress}%`;
+
+  renderComments(task);
+  openModal('detailModalBackdrop');
+}
+
+function renderComments(task) {
+  const list = document.getElementById('commentList');
+  const comments = task.comments || [];
+  list.innerHTML = comments.length
+    ? comments.map(c => `
+        <div class="comment-item">
+          <span class="who">${escapeHtml(c.user)}</span>
+          <span class="when">${formatDateTime(c.date)}</span>
+          <div>${escapeHtml(c.text)}</div>
+        </div>
+      `).join('')
+    : '<div class="empty-state">No comments yet.</div>';
+}
+
+function onSaveStatus() {
+  if (!activeTaskId) return;
+  const status = document.getElementById('detailStatus').value;
+  const progress = Number(document.getElementById('detailProgress').value);
+  const changes = { status, progress: status === 'Completed' ? 100 : progress };
+  updateTask(activeTaskId, changes, session.name, `set status to "${status}" (${changes.progress}%)`);
+  renderAll();
+  showToast('Status updated.');
+}
+
+function onAddComment() {
+  if (!activeTaskId) return;
+  const input = document.getElementById('commentInput');
+  const text = input.value.trim();
+  if (!text) return;
+  const task = addComment(activeTaskId, session.name, text);
+  input.value = '';
+  renderComments(task);
+  renderActivity();
+}
+
+/* ---------- Export ---------- */
+
+function onExport() {
+  exportTasksToCSV(filteredTasks(), 'assignments.csv');
+}
+
+/* ---------- Modal helpers ---------- */
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+/* ---------- Small utils ---------- */
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function formatDateTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+let toastTimer = null;
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2500);
+}

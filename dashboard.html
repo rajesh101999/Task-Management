@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard · Task Manager</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><img src="assets/logo.png" alt="Cranes Varsity" class="topbar-logo"> Task Manager</div>
+  <div class="user-info">
+    <span id="userName"></span>
+    <span id="userRole" class="badge-role"></span>
+    <button class="btn btn-secondary btn-sm" id="logoutBtn">Log Out</button>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="tabs" id="tabBar" style="display:none;">
+    <button type="button" class="tab-btn active" data-tab="assignmentsView">Assignments</button>
+    <button type="button" class="tab-btn" data-tab="employeesView">Team</button>
+  </div>
+
+  <div id="assignmentsView">
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <div class="main-grid">
+      <div class="panel">
+        <div class="panel-header">
+          <h2 id="tableTitle">Assignments</h2>
+          <div class="filters">
+            <select id="filterStatus">
+              <option value="">All Statuses</option>
+            </select>
+            <select id="filterPriority">
+              <option value="">All Priorities</option>
+            </select>
+            <input type="text" id="filterSearch" placeholder="Search...">
+            <button class="btn btn-secondary btn-sm" id="exportBtn">Export CSV</button>
+            <button class="btn btn-primary btn-sm" id="newTaskBtn" style="display:none;">+ New Assignment</button>
+          </div>
+        </div>
+        <div class="panel-body table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Division</th>
+                <th>Assignment</th>
+                <th>Owner</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th>Time</th>
+                <th>Start Date</th>
+                <th>Due Date</th>
+                <th>Progress</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="taskTableBody"></tbody>
+          </table>
+          <div id="emptyState" class="empty-state" style="display:none;">No assignments found.</div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:20px;">
+        <div class="panel" id="workloadPanel">
+          <div class="panel-header"><h2>Employee Workload</h2></div>
+          <div class="panel-body" id="workloadBody"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h2>Recent Activity</h2></div>
+          <div class="panel-body" id="activityBody"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="employeesView" style="display:none;">
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Team Members</h2>
+        <div class="filters">
+          <input type="text" id="employeeSearch" placeholder="Search...">
+          <button class="btn btn-primary btn-sm" id="newEmployeeBtn">+ Add Member</button>
+        </div>
+      </div>
+      <div class="panel-body table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Division</th>
+              <th>Active Tasks</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="employeeTableBody"></tbody>
+        </table>
+        <div id="employeeEmptyState" class="empty-state" style="display:none;">No team members yet.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create / Edit Assignment Modal -->
+<div class="modal-backdrop" id="taskModalBackdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="taskModalTitle">New Assignment</h3>
+      <button class="modal-close" data-close="taskModalBackdrop">&times;</button>
+    </div>
+    <form id="taskForm">
+      <div class="modal-body">
+        <input type="hidden" id="taskId">
+        <div class="grid-2">
+          <div class="field">
+            <label for="f_division">Division</label>
+            <input type="text" id="f_division" required>
+          </div>
+          <div class="field">
+            <label for="f_priority">Priority</label>
+            <select id="f_priority" required></select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="f_title">Assignment Title</label>
+          <input type="text" id="f_title" required>
+        </div>
+        <div class="field">
+          <label for="f_description">Description</label>
+          <textarea id="f_description" rows="3"></textarea>
+        </div>
+        <div class="field">
+          <label for="f_assignedTo">Assigned Employee</label>
+          <select id="f_assignedTo" required></select>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="f_startDate">Start Date</label>
+            <input type="date" id="f_startDate" required>
+          </div>
+          <div class="field">
+            <label for="f_dueDate">Due Date</label>
+            <input type="date" id="f_dueDate" required>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="f_estimatedTime">Estimated Time</label>
+            <input type="text" id="f_estimatedTime" placeholder="e.g. 8 hrs">
+          </div>
+          <div class="field">
+            <label for="f_status">Status</label>
+            <select id="f_status"></select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="f_remarks">Remarks</label>
+          <textarea id="f_remarks" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close="taskModalBackdrop">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Assignment</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Task Detail Modal -->
+<div class="modal-backdrop" id="detailModalBackdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="detailTitle">Assignment Details</h3>
+      <button class="modal-close" data-close="detailModalBackdrop">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="detailDescription" style="color: var(--text-muted); font-size: 13px;"></p>
+      <div id="detailMeta"></div>
+
+      <div class="field" style="margin-top:16px;">
+        <label>Status</label>
+        <select id="detailStatus"></select>
+      </div>
+      <div class="field">
+        <label>Progress: <span id="progressValue">0%</span></label>
+        <input type="range" id="detailProgress" min="0" max="100" step="5" style="width:100%;">
+      </div>
+      <button class="btn btn-secondary btn-sm" id="saveStatusBtn">Update</button>
+
+      <h4 style="margin: 20px 0 6px; font-size:13px;">Comments</h4>
+      <div class="comment-list" id="commentList"></div>
+      <div class="field" style="display:flex; gap:8px;">
+        <input type="text" id="commentInput" placeholder="Add a comment...">
+        <button class="btn btn-primary btn-sm" id="addCommentBtn">Post</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-close="detailModalBackdrop">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Team Member Modal -->
+<div class="modal-backdrop" id="employeeModalBackdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="employeeModalTitle">Add Member</h3>
+      <button class="modal-close" data-close="employeeModalBackdrop">&times;</button>
+    </div>
+    <form id="employeeForm">
+      <div class="modal-body">
+        <input type="hidden" id="e_id">
+        <div class="field">
+          <label>Role</label>
+          <div class="role-toggle">
+            <label><input type="radio" name="e_role" value="Employee" checked><span>Employee</span></label>
+            <label><input type="radio" name="e_role" value="Manager"><span>Manager</span></label>
+          </div>
+          <p id="e_selfRoleHint" style="color: var(--text-muted); font-size: 12px; margin: 6px 0 0; display:none;">
+            You can't change your own role while signed in as it.
+          </p>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="e_employeeId">ID</label>
+            <input type="text" id="e_employeeId" placeholder="Auto-generated">
+          </div>
+          <div class="field">
+            <label for="e_division">Division</label>
+            <input type="text" id="e_division" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="e_name">Full Name</label>
+          <input type="text" id="e_name" required>
+        </div>
+        <div class="field">
+          <label for="e_email">Email</label>
+          <input type="email" id="e_email" required autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="e_password">Password</label>
+          <input type="text" id="e_password" autocomplete="new-password" placeholder="Set a login password">
+        </div>
+        <p id="employeeHint" style="color: var(--text-muted); font-size: 12px; margin: -6px 0 0;">
+          Share the email and password with them — they'll use them to sign in.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close="employeeModalBackdrop">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Member</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/auth.js"></script>
+<script src="js/data.js"></script>
+<script src="js/dashboard.js"></script>
+</body>
+</html>
