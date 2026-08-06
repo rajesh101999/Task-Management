@@ -1,7 +1,9 @@
 # Assignment Tracker Dashboard
 
-A small assignment tracker with email/password login and two roles:
-**Manager** and **Employee**. Static HTML/CSS/JS frontend (no build step,
+A small assignment tracker with email/password login and three roles:
+**Admin**, **Manager**, and **Employee** (Admin and Manager both get full
+access — Admin is a separate label for the same permission tier, not a
+replacement for Manager). Static HTML/CSS/JS frontend (no build step,
 hosted on GitHub Pages), backed by a free [Supabase](https://supabase.com)
 project (Postgres + Auth) so accounts and assignments are shared across
 every device — not just the browser that created them.
@@ -32,13 +34,13 @@ else from the dashboard's Team tab.
   passwords, real sessions — not stored in the browser). No public
   sign-up page — `signup.html` is just a redirect stub kept around in
   case of old links/bookmarks.
-- **Manager view** — create, edit, delete assignments; assign to any
+- **Manager / Admin view** — create, edit, delete assignments; assign to any
   registered employee; see every assignment, workload, and activity feed.
-- **Team tab (Manager only)** — add, edit, or remove Manager and Employee
-  accounts (name, ID, email, division, password) directly from the
-  dashboard. A manager can edit their own details too, except their own
-  role, and can't delete the account they're currently signed in as.
-  Email/password changes for *other* members aren't supported from this
+- **Team tab (Manager/Admin only)** — add, edit, or remove Admin, Manager,
+  and Employee accounts (name, ID, email, division, password) directly from
+  the dashboard. A manager/admin can edit their own details too, except
+  their own role, and can't delete the account they're currently signed in
+  as. Email/password changes for *other* members aren't supported from this
   tab — Supabase Auth only allows an account to change its own login
   credentials, so those fields are locked when editing someone else.
 - **Employee view** — see only assignments assigned to them; update status

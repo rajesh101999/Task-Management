@@ -23,7 +23,7 @@ async function boot() {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
-  if (session.role === 'Manager') {
+  if (hasFullAccess(session.role)) {
     document.getElementById('newTaskBtn').style.display = 'inline-flex';
     document.getElementById('tableTitle').textContent = 'All Assignments';
     document.getElementById('teamNavItem').style.display = 'flex';
@@ -126,7 +126,7 @@ function filteredTasks() {
 function renderAll() {
   renderKPIs();
   renderTable();
-  if (session.role === 'Manager') {
+  if (hasFullAccess(session.role)) {
     renderWorkload();
     renderEmployees();
   }
@@ -195,11 +195,11 @@ function renderTable() {
   tbody.innerHTML = tasks.map(t => {
     const overdue = isOverdue(t);
     // Employees can create tasks for themselves (t.assignedBy === them); those
-    // get the same Edit/Delete as a Manager gets. Manager-assigned work only
-    // ever gets "Update" (status/progress/comments via the detail modal).
-    const isOwnTask = session.role !== 'Manager' && t.assignedBy === session.id;
+    // get the same Edit/Delete as a Manager/Admin gets. Manager-assigned work
+    // only ever gets "Update" (status/progress/comments via the detail modal).
+    const isOwnTask = !hasFullAccess(session.role) && t.assignedBy === session.id;
     let actions;
-    if (session.role === 'Manager') {
+    if (hasFullAccess(session.role)) {
       actions = `<button class="icon-btn" onclick="openDetailModal(${t.id})">View</button>
          <button class="icon-btn" onclick="openTaskModal(${t.id})">Edit</button>
          <button class="icon-btn" onclick="onDeleteTask(${t.id})">Delete</button>`;
@@ -244,9 +244,10 @@ function renderWorkload() {
 }
 
 // Active-work count shown per row: what an Employee is doing, or what a
-// Manager currently has open (assignments they created that aren't wrapped up).
+// Manager/Admin currently has open (assignments they created that aren't
+// wrapped up).
 function activeCountFor(user, tasks) {
-  return user.role === 'Manager'
+  return hasFullAccess(user.role)
     ? tasks.filter(t => t.assignedBy === user.id && !['Completed', 'Cancelled'].includes(t.status)).length
     : tasks.filter(t => t.assignedTo === user.id && !['Completed', 'Cancelled'].includes(t.status)).length;
 }
@@ -395,7 +396,7 @@ async function onDeleteEmployee(id) {
   const member = allUsers.find(u => u.id === id);
   if (!member) return;
   const activeCount = activeCountFor(member, allTasks);
-  const noun = member.role === 'Manager' ? 'open assignment(s) they created' : 'active assignment(s)';
+  const noun = hasFullAccess(member.role) ? 'open assignment(s) they created' : 'active assignment(s)';
   const warning = activeCount ? `${member.name} has ${activeCount} ${noun}. ` : '';
   if (!confirm(`${warning}Delete ${member.name}'s account? This cannot be undone.`)) return;
 
@@ -434,7 +435,7 @@ function openTaskModal(id) {
   document.getElementById('taskId').value = '';
   const assignedToSelect = document.getElementById('f_assignedTo');
   const assignedToLabel = document.querySelector('label[for="f_assignedTo"]');
-  const isManager = session.role === 'Manager';
+  const isManager = hasFullAccess(session.role);
 
   if (id) {
     const task = allTasks.find(t => t.id === id);
@@ -475,7 +476,7 @@ async function onSaveTask(e) {
     priority: document.getElementById('f_priority').value,
     title: document.getElementById('f_title').value.trim(),
     description: document.getElementById('f_description').value.trim(),
-    assignedTo: session.role === 'Manager' ? document.getElementById('f_assignedTo').value : session.id,
+    assignedTo: hasFullAccess(session.role) ? document.getElementById('f_assignedTo').value : session.id,
     startDate: document.getElementById('f_startDate').value,
     dueDate: document.getElementById('f_dueDate').value,
     estimatedTime: document.getElementById('f_estimatedTime').value.trim(),

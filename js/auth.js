@@ -43,7 +43,7 @@ async function login(email, password) {
   const session = await getSession();
   if (!session) {
     await sb.auth.signOut();
-    return { ok: false, error: 'Your account is not active. Contact a Manager.' };
+    return { ok: false, error: 'Your account is not active. Contact a Manager or Admin.' };
   }
   return { ok: true, session };
 }
@@ -83,11 +83,21 @@ async function getEmployees() {
   return users.filter(u => u.role === 'Employee');
 }
 
-// Next free ID for a role — EMP0xx for Employees, MGR0xx for Managers —
-// based on the highest existing numeric suffix for that prefix. Pure/sync:
-// callers supply the current user list (a fresh fetch, or a cache).
+// Roles with full (Manager-level) access to the dashboard — Team tab,
+// creating/editing/deleting any assignment or team member, etc. Admin is a
+// superset alongside Manager rather than a replacement for it.
+function hasFullAccess(role) {
+  return role === 'Manager' || role === 'Admin';
+}
+
+const ID_PREFIXES = { Manager: 'MGR', Admin: 'ADM' };
+
+// Next free ID for a role — EMP0xx for Employees, MGR0xx for Managers,
+// ADM0xx for Admins — based on the highest existing numeric suffix for that
+// prefix. Pure/sync: callers supply the current user list (a fresh fetch, or
+// a cache).
 function getNextUserId(role, users) {
-  const prefix = role === 'Manager' ? 'MGR' : 'EMP';
+  const prefix = ID_PREFIXES[role] || 'EMP';
   const re = new RegExp(`^${prefix}(\\d+)$`);
   const nums = users
     .map(u => re.exec(u.employeeId || ''))
