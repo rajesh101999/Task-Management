@@ -6,7 +6,6 @@
 let session = null;
 let allUsers = [];
 let allTasks = [];
-let allActivities = [];
 let activeTaskId = null;
 
 document.addEventListener('DOMContentLoaded', boot);
@@ -91,7 +90,7 @@ function fillEmployeeOptions() {
 /* ---------- Fetch + cache ---------- */
 
 async function refreshData() {
-  [allUsers, allTasks, allActivities] = await Promise.all([getUsers(), getTasks(), getActivities()]);
+  [allUsers, allTasks] = await Promise.all([getUsers(), getTasks()]);
 }
 
 async function refreshAndRender() {
@@ -130,7 +129,6 @@ function renderAll() {
     renderWorkload();
     renderEmployees();
   }
-  renderActivity();
 }
 
 /* ---------- Tabs ---------- */
@@ -410,23 +408,6 @@ async function onDeleteEmployee(id) {
   showToast('Member removed.');
 }
 
-function renderActivity() {
-  const activities = allActivities.slice(0, 12);
-  const body = document.getElementById('activityBody');
-
-  if (!activities.length) {
-    body.innerHTML = '<div class="empty-state">No recent activity.</div>';
-    return;
-  }
-
-  body.innerHTML = activities.map(a => `
-    <div class="activity-item">
-      <div><strong>${escapeHtml(ownerName(a.user_id, allUsers))}</strong> ${escapeHtml(a.action)}</div>
-      <div class="activity-meta">${formatDateTime(a.created_at)}</div>
-    </div>
-  `).join('');
-}
-
 /* ---------- Create / Edit modal ---------- */
 
 function openTaskModal(id) {
@@ -589,7 +570,6 @@ async function onAddComment() {
   input.value = '';
   renderComments(await getComments(activeTaskId));
   await refreshData();
-  renderActivity();
 }
 
 /* ---------- Export ---------- */

@@ -35,55 +35,48 @@
   <div class="container">
 
   <div id="assignmentsView">
-    <div class="kpi-grid" id="kpiGrid"></div>
+    <div class="dashboard-top">
+      <div class="kpi-grid" id="kpiGrid"></div>
+      <div class="panel" id="workloadPanel">
+        <div class="panel-header"><h2>Employee Workload</h2></div>
+        <div class="panel-body" id="workloadBody"></div>
+      </div>
+    </div>
 
-    <div class="main-grid">
-      <div class="panel">
-        <div class="panel-header">
-          <h2 id="tableTitle">Assignments</h2>
-          <div class="filters">
-            <select id="filterStatus">
-              <option value="">All Statuses</option>
-            </select>
-            <select id="filterPriority">
-              <option value="">All Priorities</option>
-            </select>
-            <input type="text" id="filterSearch" placeholder="Search...">
-            <button class="btn btn-secondary btn-sm" id="exportBtn">Export Excel</button>
-            <button class="btn btn-primary btn-sm" id="newTaskBtn" style="display:none;">+ New Assignment</button>
-          </div>
-        </div>
-        <div class="panel-body table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Division</th>
-                <th>Assignment</th>
-                <th>Owner</th>
-                <th>Status</th>
-                <th>Priority</th>
-                <th>Time</th>
-                <th>Start Date</th>
-                <th>Due Date</th>
-                <th>Progress</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="taskTableBody"></tbody>
-          </table>
-          <div id="emptyState" class="empty-state" style="display:none;">No assignments found.</div>
+    <div class="panel">
+      <div class="panel-header">
+        <h2 id="tableTitle">Assignments</h2>
+        <div class="filters">
+          <select id="filterStatus">
+            <option value="">All Statuses</option>
+          </select>
+          <select id="filterPriority">
+            <option value="">All Priorities</option>
+          </select>
+          <input type="text" id="filterSearch" placeholder="Search...">
+          <button class="btn btn-secondary btn-sm" id="exportBtn">Export Excel</button>
+          <button class="btn btn-primary btn-sm" id="newTaskBtn" style="display:none;">+ New Assignment</button>
         </div>
       </div>
-
-      <div style="display:flex; flex-direction:column; gap:20px;">
-        <div class="panel" id="workloadPanel">
-          <div class="panel-header"><h2>Employee Workload</h2></div>
-          <div class="panel-body" id="workloadBody"></div>
-        </div>
-        <div class="panel">
-          <div class="panel-header"><h2>Recent Activity</h2></div>
-          <div class="panel-body" id="activityBody"></div>
-        </div>
+      <div class="panel-body table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Division</th>
+              <th>Assignment</th>
+              <th>Owner</th>
+              <th>Status</th>
+              <th>Priority</th>
+              <th>Time</th>
+              <th>Start Date</th>
+              <th>Due Date</th>
+              <th>Progress</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="taskTableBody"></tbody>
+        </table>
+        <div id="emptyState" class="empty-state" style="display:none;">No assignments found.</div>
       </div>
     </div>
   </div>
