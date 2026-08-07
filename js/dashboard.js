@@ -15,8 +15,9 @@ async function boot() {
   if (!session) return; // requireAuth already redirected to index.html
 
   document.getElementById('userName').textContent = session.name;
-  document.getElementById('userRole').textContent = session.role;
+  document.getElementById('userEmail').textContent = session.email;
   document.getElementById('logoutBtn').addEventListener('click', logout);
+  setupHeaderMenu();
 
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
@@ -64,6 +65,36 @@ async function boot() {
   await refreshData();
   fillEmployeeOptions();
   renderAll();
+}
+
+// Avatar opens/closes the profile dropdown (name, email, logout); the
+// fullscreen icon is the one header action that's actually wired up.
+// Dark mode / notifications are visual placeholders for now — no theme
+// system or notification feed exists yet.
+function setupHeaderMenu() {
+  const profileBtn = document.getElementById('profileBtn');
+  const profileDropdown = document.getElementById('profileDropdown');
+
+  profileBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = profileDropdown.classList.toggle('open');
+    profileBtn.setAttribute('aria-expanded', String(isOpen));
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!profileDropdown.contains(e.target) && e.target !== profileBtn) {
+      profileDropdown.classList.remove('open');
+      profileBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  document.getElementById('fullscreenBtn').addEventListener('click', () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+  });
 }
 
 function fillOptions(select, values, includeAll) {

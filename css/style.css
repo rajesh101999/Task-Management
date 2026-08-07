@@ -231,33 +231,119 @@ a:hover { text-decoration: underline; }
   display: block;
 }
 
-.top-header .user-info {
+.header-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.icon-btn-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  cursor: pointer;
+}
+
+.icon-btn-header:hover { background: rgba(255, 255, 255, 0.24); }
+.icon-btn-header svg { width: 18px; height: 18px; }
+
+.profile-menu { position: relative; }
+
+.avatar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2dd4bf, #4f46e5);
+  color: #fff;
+  cursor: pointer;
+}
+
+.avatar-btn svg { width: 20px; height: 20px; }
+
+.profile-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 280px;
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.18);
+  padding: 20px;
+  z-index: 20;
+}
+
+.profile-dropdown.open { display: block; }
+
+.profile-dropdown-header {
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-bottom: 18px;
+}
+
+.avatar-lg {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2dd4bf, #4f46e5);
+  color: #fff;
+}
+
+.avatar-lg svg { width: 24px; height: 24px; }
+
+.profile-id { min-width: 0; }
+
+.profile-name {
+  font-weight: 700;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-email {
+  color: var(--text-muted);
   font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.top-header .btn-secondary {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: #fff;
-}
-
-.top-header .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.22);
-}
-
-.badge-role {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
-  padding: 3px 9px;
-  border-radius: 20px;
+.logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  background: var(--primary-light);
+  color: var(--primary);
   font-weight: 600;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  font-size: 14px;
+  cursor: pointer;
 }
+
+.logout-btn:hover { background: #e0e7ff; }
+.logout-btn svg { width: 16px; height: 16px; }
 
 .app-shell {
   display: flex;
