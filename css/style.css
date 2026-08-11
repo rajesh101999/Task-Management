@@ -350,11 +350,20 @@ a:hover { text-decoration: underline; }
   align-items: flex-start;
 }
 
+/* The actual flex item next to .sidebar (.container is nested inside it).
+   Flex items default to min-width: auto — refusing to shrink below their
+   content's natural width — so without this, a wide table pushes the
+   whole page wider than the screen instead of scrolling inside its own
+   .table-scroll box. */
+.main-area {
+  flex: 1;
+  min-width: 0;
+}
+
 .container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 24px;
-  flex: 1;
   min-width: 0;
 }
 
