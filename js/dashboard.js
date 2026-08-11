@@ -29,6 +29,9 @@ async function boot() {
     document.getElementById('newTaskBtn').style.display = 'inline-flex';
     document.getElementById('tableTitle').textContent = 'All Assignments';
     document.getElementById('teamNavItem').style.display = 'flex';
+    // Employees only ever see their own tasks anyway; a Manager/Admin sees
+    // their team's/everyone's, so this toggle is what gets them "my tasks".
+    document.getElementById('myTasksWrap').style.display = 'flex';
     document.getElementById('newEmployeeBtn').addEventListener('click', () => openEmployeeModal());
     document.getElementById('employeeForm').addEventListener('submit', onSaveEmployee);
     document.getElementById('employeeSearch').addEventListener('input', renderEmployees);
@@ -63,6 +66,7 @@ async function boot() {
 
   document.getElementById('filterStatus').addEventListener('change', renderAll);
   document.getElementById('filterPriority').addEventListener('change', renderAll);
+  document.getElementById('filterMine').addEventListener('change', renderAll);
   document.getElementById('filterSearch').addEventListener('input', renderAll);
   document.getElementById('exportBtn').addEventListener('click', onExport);
   document.getElementById('newTaskBtn').addEventListener('click', () => openTaskModal());
@@ -122,15 +126,48 @@ function fillOptions(select, values, includeAll) {
   });
 }
 
+function assigneeOption(user) {
+  const opt = document.createElement('option');
+  opt.value = user.id;
+  opt.textContent = `${user.name} (${user.division})`;
+  return opt;
+}
+
+function appendOptionGroup(select, label, users) {
+  if (!users.length) return;
+  const group = document.createElement('optgroup');
+  group.label = label;
+  users.forEach(u => group.appendChild(assigneeOption(u)));
+  select.appendChild(group);
+}
+
+// A Manager can only hand work to their own team's Employees (allUsers is
+// already scoped that way by RLS). Admin can additionally assign to a
+// Manager — grouped separately in the dropdown so the two are easy to tell
+// apart at a glance.
 function fillEmployeeOptions() {
   const select = document.getElementById('f_assignedTo');
   select.innerHTML = '';
-  allUsers.filter(u => u.role === 'Employee').forEach(emp => {
-    const opt = document.createElement('option');
-    opt.value = emp.id;
-    opt.textContent = `${emp.name} (${emp.division})`;
-    select.appendChild(opt);
-  });
+
+  if (session.role === 'Admin') {
+    appendOptionGroup(select, 'Managers', allUsers.filter(u => u.role === 'Manager'));
+    appendOptionGroup(select, 'Employees', allUsers.filter(u => u.role === 'Employee'));
+  } else {
+    allUsers.filter(u => u.role === 'Employee').forEach(emp => select.appendChild(assigneeOption(emp)));
+  }
+
+  // Neither branch above includes the signed-in Manager/Admin themselves
+  // (a Manager isn't an Employee; Admin is in neither group), so a
+  // Manager/Admin could never assign work to their own name. Add "Me" up
+  // front so they can create a task for themselves too.
+  if (hasFullAccess(session.role)) {
+    const me = allUsers.find(u => u.id === session.id);
+    if (me) {
+      const opt = assigneeOption(me);
+      opt.textContent = `${me.name} (Me)`;
+      select.insertBefore(opt, select.firstChild);
+    }
+  }
 }
 
 /* ---------- Fetch + cache ---------- */
@@ -160,10 +197,12 @@ function filteredTasks() {
   const status = document.getElementById('filterStatus').value;
   const priority = document.getElementById('filterPriority').value;
   const search = document.getElementById('filterSearch').value.trim().toLowerCase();
+  const mineOnly = hasFullAccess(session.role) && document.getElementById('filterMine').checked;
 
   return visibleTasks().filter(t => {
     if (status && t.status !== status) return false;
     if (priority && t.priority !== priority) return false;
+    if (mineOnly && t.assignedTo !== session.id) return false;
     if (search && !`${t.title} ${t.division} ${ownerName(t.assignedTo, allUsers)}`.toLowerCase().includes(search)) return false;
     return true;
   });
@@ -181,6 +220,22 @@ function renderAll() {
   if (session.role === 'Admin') {
     renderTeams();
   }
+  renderHeaderTeam();
+}
+
+// Small always-visible badge in the header showing which team the signed-in
+// person is scoped to: the team a Manager leads, or the team an Employee
+// belongs to. Admin isn't scoped to a single team, so nothing shows for them.
+function renderHeaderTeam() {
+  const badge = document.getElementById('headerTeamBadge');
+  let name = null;
+  if (session.role === 'Manager') {
+    name = myTeamId ? teamName(myTeamId) : null;
+  } else if (session.role === 'Employee') {
+    name = session.teamId ? teamName(session.teamId) : null;
+  }
+  badge.textContent = name || '';
+  badge.style.display = name ? 'inline-block' : 'none';
 }
 
 /* ---------- Tabs ---------- */
@@ -670,7 +725,10 @@ function openTaskModal(id) {
 
   // Employees can only ever create/keep tasks assigned to themselves — they
   // can't hand work to (or take work from) someone else via this form.
-  assignedToLabel.textContent = isManager ? 'Assigned Employee' : 'Assigned To';
+  // Admin's list includes Managers as well as Employees, so "Assigned
+  // Employee" would undersell it — a plain Manager still only ever assigns
+  // to their own team's Employees, so that label still fits for them.
+  assignedToLabel.textContent = session.role === 'Admin' ? 'Assigned To' : (isManager ? 'Assigned Employee' : 'Assigned To');
   assignedToSelect.disabled = !isManager;
   if (!isManager) assignedToSelect.value = session.id;
 

@@ -231,6 +231,17 @@ a:hover { text-decoration: underline; }
   display: block;
 }
 
+.header-team-badge {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  margin-left: 4px;
+}
+
 .header-actions {
   position: relative;
   display: flex;
@@ -539,6 +550,23 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--border);
   border-radius: 7px;
   font-size: 13px;
+}
+
+.my-tasks-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.my-tasks-check input {
+  width: auto;
+  padding: 0;
+  border: none;
+  cursor: pointer;
 }
 
 table {

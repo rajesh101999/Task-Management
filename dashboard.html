@@ -9,7 +9,10 @@
 <body>
 
 <header class="top-header">
-  <div class="brand"><img src="assets/logo.png" alt="Cranes Varsity" class="header-logo"> Task Manager</div>
+  <div class="brand">
+    <img src="assets/logo.png" alt="Cranes Varsity" class="header-logo"> Task Manager
+    <span id="headerTeamBadge" class="header-team-badge" style="display:none;"></span>
+  </div>
   <div class="header-actions">
     <button type="button" class="icon-btn-header" id="darkModeBtn" title="Dark mode" aria-label="Toggle dark mode">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -84,6 +87,9 @@
           <select id="filterPriority">
             <option value="">All Priorities</option>
           </select>
+          <label class="my-tasks-check" id="myTasksWrap" style="display:none;">
+            <input type="checkbox" id="filterMine"> My Tasks Only
+          </label>
           <input type="text" id="filterSearch" placeholder="Search...">
           <button class="btn btn-secondary btn-sm" id="exportBtn">Export Excel</button>
           <button class="btn btn-primary btn-sm" id="newTaskBtn" style="display:none;">+ New Assignment</button>

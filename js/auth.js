@@ -42,6 +42,7 @@ async function getSession() {
     email: profile.email,
     role: profile.role,
     division: profile.division,
+    teamId: profile.team_id,
   };
 }
 
