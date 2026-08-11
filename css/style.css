@@ -613,7 +613,7 @@ tbody tr:hover { background: #fafbff; }
 
 .overdue-text { color: var(--danger); font-weight: 600; }
 
-.row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.row-actions { display: flex; gap: 6px; flex-wrap: nowrap; }
 
 .icon-btn {
   border: 1px solid var(--border);
@@ -622,6 +622,8 @@ tbody tr:hover { background: #fafbff; }
   padding: 5px 8px;
   font-size: 12px;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .icon-btn:hover { background: var(--bg); }
 
