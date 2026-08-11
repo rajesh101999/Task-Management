@@ -101,7 +101,16 @@ function hasFullAccess(role) {
   return role === 'Manager' || role === 'Admin';
 }
 
-const ID_PREFIXES = { Manager: 'MGR', Admin: 'ADM' };
+// Everyone else: Employee, Intern, External. Each can be assigned work,
+// belongs to a team, and only ever sees their own assignments (enforced by
+// RLS) — identical access, just a different label for org-chart purposes.
+// Named as the inverse of hasFullAccess so a future addition to either
+// group can't quietly fall through the cracks between the two.
+function isStaffRole(role) {
+  return !hasFullAccess(role);
+}
+
+const ID_PREFIXES = { Manager: 'MGR', Admin: 'ADM', Intern: 'INT', External: 'EXT' };
 
 // Next free ID for a role — EMP0xx for Employees, MGR0xx for Managers,
 // ADM0xx for Admins — based on the highest existing numeric suffix for that

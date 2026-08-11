@@ -141,20 +141,20 @@ function appendOptionGroup(select, label, users) {
   select.appendChild(group);
 }
 
-// A Manager can only hand work to their own team's Employees (allUsers is
-// already scoped that way by RLS). Admin can additionally assign to a
-// Manager — grouped separately in the dropdown so the two are easy to tell
-// apart at a glance.
+// A Manager can only hand work to their own team's staff — Employee,
+// Intern, or External (allUsers is already scoped that way by RLS). Admin
+// can additionally assign to a Manager — each role gets its own group in
+// the dropdown so they're easy to tell apart at a glance.
 function fillEmployeeOptions() {
   const select = document.getElementById('f_assignedTo');
   select.innerHTML = '';
 
   if (session.role === 'Admin') {
     appendOptionGroup(select, 'Managers', allUsers.filter(u => u.role === 'Manager'));
-    appendOptionGroup(select, 'Employees', allUsers.filter(u => u.role === 'Employee'));
-  } else {
-    allUsers.filter(u => u.role === 'Employee').forEach(emp => select.appendChild(assigneeOption(emp)));
   }
+  appendOptionGroup(select, 'Employees', allUsers.filter(u => u.role === 'Employee'));
+  appendOptionGroup(select, 'Interns', allUsers.filter(u => u.role === 'Intern'));
+  appendOptionGroup(select, 'External', allUsers.filter(u => u.role === 'External'));
 
   // Neither branch above includes the signed-in Manager/Admin themselves
   // (a Manager isn't an Employee; Admin is in neither group), so a
@@ -224,14 +224,15 @@ function renderAll() {
 }
 
 // Small always-visible badge in the header showing which team the signed-in
-// person is scoped to: the team a Manager leads, or the team an Employee
-// belongs to. Admin isn't scoped to a single team, so nothing shows for them.
+// person is scoped to: the team a Manager leads, or the team their own
+// staff role (Employee/Intern/External) belongs to. Admin isn't scoped to
+// a single team, so nothing shows for them.
 function renderHeaderTeam() {
   const badge = document.getElementById('headerTeamBadge');
   let name = null;
   if (session.role === 'Manager') {
     name = myTeamId ? teamName(myTeamId) : null;
-  } else if (session.role === 'Employee') {
+  } else if (isStaffRole(session.role)) {
     name = session.teamId ? teamName(session.teamId) : null;
   }
   badge.textContent = name || '';
@@ -335,11 +336,11 @@ function renderTable() {
 }
 
 function renderWorkload() {
-  const employees = allUsers.filter(u => u.role === 'Employee');
+  const employees = allUsers.filter(u => isStaffRole(u.role));
   const body = document.getElementById('workloadBody');
 
   if (!employees.length) {
-    body.innerHTML = '<div class="empty-state">No employees yet.</div>';
+    body.innerHTML = '<div class="empty-state">No team members yet.</div>';
     return;
   }
 
@@ -476,13 +477,13 @@ function updateEmployeeIdPlaceholder() {
   document.getElementById('e_employeeId').placeholder = getNextUserId(role, allUsers);
 }
 
-// The Team picker only makes sense for Employee accounts, and only Admin
-// gets to choose freely — a Manager adding their own hire is silently
-// pinned to the team they lead (see onSaveEmployee), so the field would
-// just be a confusing no-op for them.
+// The Team picker only makes sense for staff accounts (Employee/Intern/
+// External), and only Admin gets to choose freely — a Manager adding their
+// own hire is silently pinned to the team they lead (see onSaveEmployee),
+// so the field would just be a confusing no-op for them.
 function updateTeamFieldVisibility() {
   const role = document.querySelector('input[name="e_role"]:checked').value;
-  const show = session.role === 'Admin' && role === 'Employee';
+  const show = session.role === 'Admin' && isStaffRole(role);
   document.getElementById('e_teamField').style.display = show ? 'block' : 'none';
 }
 
@@ -499,11 +500,11 @@ async function onSaveEmployee(e) {
     role: document.querySelector('input[name="e_role"]:checked').value,
   };
 
-  // Only Employees carry a team_id (a Manager's "team" is the team that
-  // names them as manager, not something on their own profile). Admin
-  // picks freely from the dropdown; a Manager adding their own hire is
-  // silently pinned to the team they lead.
-  if (payload.role === 'Employee') {
+  // Only staff (Employee/Intern/External) carry a team_id (a Manager's
+  // "team" is the team that names them as manager, not something on their
+  // own profile). Admin picks freely from the dropdown; a Manager adding
+  // their own hire is silently pinned to the team they lead.
+  if (isStaffRole(payload.role)) {
     payload.teamId = session.role === 'Admin'
       ? (document.getElementById('e_team').value || null)
       : (myTeamId || null);
