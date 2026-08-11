@@ -604,7 +604,7 @@ tbody tr:hover { background: #fafbff; }
 
 .overdue-text { color: var(--danger); font-weight: 600; }
 
-.row-actions { display: flex; gap: 6px; }
+.row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
 .icon-btn {
   border: 1px solid var(--border);

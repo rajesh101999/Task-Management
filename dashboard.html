@@ -366,6 +366,33 @@
   </div>
 </div>
 
+<!-- Reset Someone Else's Password Modal -->
+<div class="modal-backdrop" id="resetPasswordModalBackdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="resetPasswordTitle">Reset Password</h3>
+      <button class="modal-close" data-close="resetPasswordModalBackdrop">&times;</button>
+    </div>
+    <form id="resetPasswordForm">
+      <div class="modal-body">
+        <input type="hidden" id="rp_id">
+        <div class="field">
+          <label for="rp_password">New Password</label>
+          <input type="text" id="rp_password" autocomplete="new-password" required minlength="6" placeholder="Set a new login password">
+        </div>
+        <p style="color: var(--text-muted); font-size: 12px;">
+          Their old password stops working immediately. Share this new one with them directly —
+          it isn't emailed to them automatically.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close="resetPasswordModalBackdrop">Cancel</button>
+        <button type="submit" class="btn btn-primary">Set Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

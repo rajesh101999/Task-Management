@@ -32,6 +32,7 @@ async function boot() {
     document.getElementById('newEmployeeBtn').addEventListener('click', () => openEmployeeModal());
     document.getElementById('employeeForm').addEventListener('submit', onSaveEmployee);
     document.getElementById('employeeSearch').addEventListener('input', renderEmployees);
+    document.getElementById('resetPasswordForm').addEventListener('submit', onResetPassword);
     document.querySelectorAll('input[name="e_role"]').forEach(r => {
       r.addEventListener('change', () => {
         updateEmployeeIdPlaceholder();
@@ -333,6 +334,7 @@ function renderEmployees() {
         <td>
           <div class="row-actions">
             <button class="icon-btn" onclick="openEmployeeModal('${member.id}')">Edit</button>
+            <button class="icon-btn" onclick="openResetPasswordModal('${member.id}')" ${isSelf ? 'disabled title="Change your own password from Edit instead"' : ''}>Reset Password</button>
             <button class="icon-btn" onclick="onDeleteEmployee('${member.id}')" ${isSelf ? 'disabled title="You can\'t delete your own account"' : ''}>Delete</button>
           </div>
         </td>
@@ -501,6 +503,33 @@ async function onDeleteEmployee(id) {
   await refreshAndRender();
   fillEmployeeOptions();
   showToast('Member removed.');
+}
+
+// The password itself is never visible to anyone, including Admin — Supabase
+// hashes it one-way at signup. This sets a brand new one instead; it's the
+// server-side reset-password Edge Function that actually applies it (see
+// resetPassword in js/auth.js and supabase/functions/reset-password).
+function openResetPasswordModal(id) {
+  const member = allUsers.find(u => u.id === id);
+  if (!member) return;
+  document.getElementById('resetPasswordForm').reset();
+  document.getElementById('rp_id').value = id;
+  document.getElementById('resetPasswordTitle').textContent = `Reset Password — ${member.name}`;
+  openModal('resetPasswordModalBackdrop');
+}
+
+async function onResetPassword(e) {
+  e.preventDefault();
+  const id = document.getElementById('rp_id').value;
+  const password = document.getElementById('rp_password').value;
+
+  const result = await resetPassword(id, password);
+  if (!result.ok) {
+    showToast(result.error || 'Could not reset the password.');
+    return;
+  }
+  closeModal('resetPasswordModalBackdrop');
+  showToast('Password updated.');
 }
 
 /* ---------- Teams (Admin only) ---------- */

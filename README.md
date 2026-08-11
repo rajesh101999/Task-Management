@@ -49,9 +49,14 @@ Teams to scope Managers to their own people.
   Admin sees everyone and can move an Employee between teams via the Team
   field. A manager/admin can edit their own details too, except their own
   role, and can't delete the account they're currently signed in as.
-  Email/password changes for *other* members aren't supported from this
-  tab — Supabase Auth only allows an account to change its own login
-  credentials, so those fields are locked when editing someone else.
+  Email changes for *other* members still aren't supported from this tab —
+  Supabase Auth only allows an account to change its own email. Passwords
+  are different: a Manager/Admin can set a brand new password for one of
+  their people via **Reset Password** on that row (the password itself is
+  never visible to anyone — it's hashed one-way at signup — this sets a new
+  one, it doesn't reveal the old one). That calls the `reset-password` Edge
+  Function since only Supabase's admin API can change *someone else's*
+  password; see Backend below.
 - **Employee view** — see only assignments assigned to them; update status
   and progress; add comments.
 - **Dashboard KPIs** — Total, Pending, In Progress, Completed, Overdue.
@@ -76,6 +81,15 @@ Teams to scope Managers to their own people.
 - Adding a team member signs the new account up on a second, memory-only
   Supabase client so the Manager's own session is never disturbed — see
   `addTeamMember` in `js/auth.js`.
+- `supabase/functions/reset-password/` is an Edge Function — the one place
+  the **service_role** key is used, since resetting someone *else's*
+  password requires Supabase's admin API, which browser code can never be
+  trusted with. Deploy it from the Supabase dashboard: **Edge Functions →
+  Deploy a new function**, name it exactly `reset-password`, paste in the
+  file's contents, **Deploy**. No secrets to configure — `SUPABASE_URL` /
+  `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` are injected
+  automatically. The function re-checks the caller's role itself (Admin, or
+  a Manager acting on their own team) — it doesn't trust the frontend.
 
 ## File structure
 
@@ -89,4 +103,5 @@ js/auth.js                Sessions, login/logout, team member + team CRUD
 js/data.js                Assignments, comments, activity log CRUD
 js/dashboard.js             Dashboard rendering and UI wiring
 supabase/migrations/        SQL to run in the Supabase SQL Editor, in order
+supabase/functions/         Edge Functions to deploy from the Supabase dashboard
 ```

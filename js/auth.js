@@ -244,6 +244,27 @@ async function updateUser(id, changes, isSelf) {
   return { ok: true, user: mapProfile(updated) };
 }
 
+// Sets a new password for someone else's account. Supabase Auth only lets
+// an account change its own password from browser code, so this calls the
+// `reset-password` Edge Function (service_role key, server-side only) —
+// see supabase/functions/reset-password/index.ts. That function re-checks
+// permissions itself; nothing here is trusted on its own.
+async function resetPassword(userId, newPassword) {
+  const { data, error } = await sb.functions.invoke('reset-password', {
+    body: { userId, newPassword },
+  });
+  if (error) {
+    let message = error.message;
+    try {
+      const body = await error.context.json();
+      if (body?.error) message = body.error;
+    } catch { /* fall back to error.message */ }
+    return { ok: false, error: message };
+  }
+  if (data?.error) return { ok: false, error: data.error };
+  return { ok: true };
+}
+
 // Removes the member's profile (and with it, their access to the app — the
 // underlying Supabase Auth login is left in place since deleting it needs
 // admin access this app doesn't use; it can be removed manually from the
