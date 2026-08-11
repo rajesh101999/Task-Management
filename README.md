@@ -21,12 +21,13 @@ project configured in `js/supabaseClient.js`.
 
 ## First login
 
-There's no self-service sign-up — accounts are created by a Manager from
-the **Team** tab (see below). The very first account (a Manager) is
+There's no self-service sign-up — accounts are created by a Manager or
+Admin from the **People** tab (see below). The very first account is
 bootstrapped directly in the Supabase dashboard: create the user under
 **Authentication → Users**, then give it a matching row in the `profiles`
-table with `role = 'Manager'`. From there, that Manager can add everyone
-else from the dashboard's Team tab.
+table with `role = 'Admin'` (or `'Manager'`). From there, that account can
+add everyone else from the dashboard's People tab, and (if Admin) set up
+Teams to scope Managers to their own people.
 
 ## What's included
 
@@ -34,13 +35,21 @@ else from the dashboard's Team tab.
   passwords, real sessions — not stored in the browser). No public
   sign-up page — `signup.html` is just a redirect stub kept around in
   case of old links/bookmarks.
-- **Manager / Admin view** — create, edit, delete assignments; assign to any
-  registered employee; see every assignment, workload, and activity feed.
-- **Team tab (Manager/Admin only)** — add, edit, or remove Admin, Manager,
-  and Employee accounts (name, ID, email, division, password) directly from
-  the dashboard. A manager/admin can edit their own details too, except
-  their own role, and can't delete the account they're currently signed in
-  as. Email/password changes for *other* members aren't supported from this
+- **Admin view** — everything a Manager can do, plus the **Teams** tab:
+  create a team, assign it a Manager, and that Manager is then scoped to
+  just that team everywhere in the app (People tab, workload, the
+  "Assigned Employee" picker, the assignments list). A Manager with no
+  team yet only sees themselves until an Admin sets one up for them.
+- **Manager view** — create, edit, delete assignments for their own team;
+  assign to any of their team's employees; see their team's assignments
+  and workload.
+- **People tab (Manager/Admin)** — add, edit, or remove Admin, Manager, and
+  Employee accounts (name, ID, email, division, team, password) directly
+  from the dashboard. A Manager only sees/adds their own team's people; an
+  Admin sees everyone and can move an Employee between teams via the Team
+  field. A manager/admin can edit their own details too, except their own
+  role, and can't delete the account they're currently signed in as.
+  Email/password changes for *other* members aren't supported from this
   tab — Supabase Auth only allows an account to change its own login
   credentials, so those fields are locked when editing someone else.
 - **Employee view** — see only assignments assigned to them; update status
@@ -49,18 +58,21 @@ else from the dashboard's Team tab.
 - **Status workflow** — Pending → Accepted → In Progress → Under Review →
   Completed, plus On Hold / Blocked / Cancelled.
 - **CSV export** of the currently filtered table.
-- All data (users + assignments + activity log + comments) lives in
-  Postgres, protected by Row Level Security so Employees only ever see
-  what's assigned to them, while Managers see everything.
+- All data (users + teams + assignments + activity log + comments) lives
+  in Postgres, protected by Row Level Security: Employees only ever see
+  what's assigned to them, a Manager only their own team, Admin sees
+  everything.
 
 ## Backend (Supabase)
 
 - `js/supabaseClient.js` holds the project URL and the **anon public**
   key. That key is meant to be exposed client-side — access is enforced
   by the database's Row Level Security policies, not by hiding the key.
-- The database schema (tables + RLS policies) lives in the project's
-  Supabase dashboard under SQL Editor's query history. Four tables:
-  `profiles`, `assignments`, `comments`, `activity_log`.
+- The database schema (tables + RLS policies) originally lived only in
+  the Supabase dashboard's SQL Editor history. Changes going forward are
+  checked in under `supabase/migrations/` — run each new file once in
+  the dashboard's SQL Editor (they're idempotent, safe to re-run). Five
+  tables: `profiles`, `teams`, `assignments`, `comments`, `activity_log`.
 - Adding a team member signs the new account up on a second, memory-only
   Supabase client so the Manager's own session is never disturbed — see
   `addTeamMember` in `js/auth.js`.
@@ -70,10 +82,11 @@ else from the dashboard's Team tab.
 ```
 index.html              Sign-in page
 signup.html              Redirect stub (old sign-up page, retired)
-dashboard.html            Role-aware dashboard (Manager / Employee), incl. Team tab
+dashboard.html            Role-aware dashboard (Admin / Manager / Employee), incl. People + Teams tabs
 css/style.css              All styling
 js/supabaseClient.js        Shared Supabase client (project URL + anon key)
-js/auth.js                Sessions, login/logout, team member CRUD
+js/auth.js                Sessions, login/logout, team member + team CRUD
 js/data.js                Assignments, comments, activity log CRUD
 js/dashboard.js             Dashboard rendering and UI wiring
+supabase/migrations/        SQL to run in the Supabase SQL Editor, in order
 ```

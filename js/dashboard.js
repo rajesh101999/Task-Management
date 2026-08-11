@@ -6,6 +6,8 @@
 let session = null;
 let allUsers = [];
 let allTasks = [];
+let allTeams = [];
+let myTeamId = null; // the team this Manager leads, if any (Admin/Employee: unused)
 let activeTaskId = null;
 
 document.addEventListener('DOMContentLoaded', boot);
@@ -31,13 +33,25 @@ async function boot() {
     document.getElementById('employeeForm').addEventListener('submit', onSaveEmployee);
     document.getElementById('employeeSearch').addEventListener('input', renderEmployees);
     document.querySelectorAll('input[name="e_role"]').forEach(r => {
-      r.addEventListener('change', updateEmployeeIdPlaceholder);
+      r.addEventListener('change', () => {
+        updateEmployeeIdPlaceholder();
+        updateTeamFieldVisibility();
+      });
     });
   } else {
     document.getElementById('tableTitle').textContent = 'My Assignments';
     document.getElementById('workloadPanel').style.display = 'none';
     document.getElementById('newTaskBtn').textContent = '+ Add My Task';
     document.getElementById('newTaskBtn').style.display = 'inline-flex';
+  }
+
+  // Teams (grouping Employees under a Manager who's then scoped to just
+  // that team) is an Admin-only capability — Managers manage members
+  // through the People tab, which RLS already scopes to their own team.
+  if (session.role === 'Admin') {
+    document.getElementById('teamsNavItem').style.display = 'flex';
+    document.getElementById('newTeamBtn').addEventListener('click', () => openTeamModal());
+    document.getElementById('teamForm').addEventListener('submit', onSaveTeam);
   }
 
   fillOptions(document.getElementById('filterStatus'), STATUSES, true);
@@ -121,7 +135,9 @@ function fillEmployeeOptions() {
 /* ---------- Fetch + cache ---------- */
 
 async function refreshData() {
-  [allUsers, allTasks] = await Promise.all([getUsers(), getTasks()]);
+  [allUsers, allTasks, allTeams] = await Promise.all([getUsers(), getTasks(), getTeams()]);
+  const led = allTeams.find(t => t.managerId === session.id);
+  myTeamId = led ? led.id : null;
 }
 
 async function refreshAndRender() {
@@ -131,9 +147,10 @@ async function refreshAndRender() {
 
 /* ---------- Data scoping ---------- */
 
-// Row Level Security already scopes `assignments` server-side (Managers see
-// all, Employees see only what's assigned to them), so allTasks is already
-// the right set — no client-side role filtering needed here.
+// Row Level Security already scopes `assignments` server-side (Admin sees
+// all, a Manager only their own team's, Employees only what's assigned to
+// them), so allTasks is already the right set — no client-side role
+// filtering needed here.
 function visibleTasks() {
   return allTasks;
 }
@@ -160,6 +177,9 @@ function renderAll() {
     renderWorkload();
     renderEmployees();
   }
+  if (session.role === 'Admin') {
+    renderTeams();
+  }
 }
 
 /* ---------- Tabs ---------- */
@@ -170,6 +190,7 @@ function switchTab(tabId) {
   });
   document.getElementById('assignmentsView').style.display = tabId === 'assignmentsView' ? 'block' : 'none';
   document.getElementById('employeesView').style.display = tabId === 'employeesView' ? 'block' : 'none';
+  document.getElementById('teamsView').style.display = tabId === 'teamsView' ? 'block' : 'none';
 }
 
 const KPI_ICONS = {
@@ -307,6 +328,7 @@ function renderEmployees() {
         <td>${escapeHtml(member.email)}</td>
         <td><span class="pill pill-role-${member.role}">${member.role}</span></td>
         <td>${escapeHtml(member.division)}</td>
+        <td>${escapeHtml(teamName(member.teamId))}</td>
         <td>${activeCountFor(member, allTasks)}</td>
         <td>
           <div class="row-actions">
@@ -317,6 +339,19 @@ function renderEmployees() {
       </tr>
     `;
   }).join('');
+
+  // A Manager with no team yet would have their new hire vanish from their
+  // own view (RLS scopes them to team_id = their team, and a brand new
+  // member can't join a team that doesn't exist) — block that instead of
+  // letting it happen silently.
+  const addBtn = document.getElementById('newEmployeeBtn');
+  if (session.role === 'Manager' && !myTeamId) {
+    addBtn.disabled = true;
+    addBtn.title = 'Ask an Admin to create your team first (Teams tab).';
+  } else {
+    addBtn.disabled = false;
+    addBtn.title = '';
+  }
 }
 
 function openEmployeeModal(id) {
@@ -331,6 +366,10 @@ function openEmployeeModal(id) {
   roleRadios.forEach(r => { r.disabled = false; });
   document.getElementById('e_selfRoleHint').style.display = 'none';
 
+  const teamSelect = document.getElementById('e_team');
+  teamSelect.innerHTML = '<option value="">No team</option>' +
+    allTeams.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+
   if (id) {
     const member = allUsers.find(u => u.id === id);
     if (!member) return;
@@ -344,6 +383,7 @@ function openEmployeeModal(id) {
     document.getElementById('e_password').placeholder = 'Leave blank to keep unchanged';
     document.getElementById('e_password').required = false;
     roleRadios.forEach(r => { r.checked = r.value === member.role; });
+    teamSelect.value = member.teamId || '';
 
     const isSelf = member.id === session.id;
     if (isSelf) {
@@ -366,15 +406,27 @@ function openEmployeeModal(id) {
     document.getElementById('e_password').placeholder = 'Set a login password';
     document.getElementById('employeeHint').textContent = "Share the email and password with them — they'll use them to sign in.";
     roleRadios.forEach(r => { r.checked = r.value === 'Employee'; });
+    teamSelect.value = session.role === 'Manager' ? (myTeamId || '') : '';
     updateEmployeeIdPlaceholder();
   }
 
+  updateTeamFieldVisibility();
   openModal('employeeModalBackdrop');
 }
 
 function updateEmployeeIdPlaceholder() {
   const role = document.querySelector('input[name="e_role"]:checked').value;
   document.getElementById('e_employeeId').placeholder = getNextUserId(role, allUsers);
+}
+
+// The Team picker only makes sense for Employee accounts, and only Admin
+// gets to choose freely — a Manager adding their own hire is silently
+// pinned to the team they lead (see onSaveEmployee), so the field would
+// just be a confusing no-op for them.
+function updateTeamFieldVisibility() {
+  const role = document.querySelector('input[name="e_role"]:checked').value;
+  const show = session.role === 'Admin' && role === 'Employee';
+  document.getElementById('e_teamField').style.display = show ? 'block' : 'none';
 }
 
 async function onSaveEmployee(e) {
@@ -389,6 +441,18 @@ async function onSaveEmployee(e) {
     password: document.getElementById('e_password').value,
     role: document.querySelector('input[name="e_role"]:checked').value,
   };
+
+  // Only Employees carry a team_id (a Manager's "team" is the team that
+  // names them as manager, not something on their own profile). Admin
+  // picks freely from the dropdown; a Manager adding their own hire is
+  // silently pinned to the team they lead.
+  if (payload.role === 'Employee') {
+    payload.teamId = session.role === 'Admin'
+      ? (document.getElementById('e_team').value || null)
+      : (myTeamId || null);
+  } else if (!isSelf) {
+    payload.teamId = null;
+  }
 
   let result;
   if (id) {
@@ -437,6 +501,111 @@ async function onDeleteEmployee(id) {
   await refreshAndRender();
   fillEmployeeOptions();
   showToast('Member removed.');
+}
+
+/* ---------- Teams (Admin only) ---------- */
+
+function teamName(id) {
+  const team = allTeams.find(t => t.id === id);
+  return team ? team.name : '—';
+}
+
+function renderTeams() {
+  const tbody = document.getElementById('teamTableBody');
+  const empty = document.getElementById('teamEmptyState');
+  if (!tbody) return;
+
+  if (!allTeams.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = allTeams.map(team => {
+    const manager = allUsers.find(u => u.id === team.managerId);
+    const memberCount = allUsers.filter(u => u.teamId === team.id).length;
+    return `
+      <tr>
+        <td>${escapeHtml(team.name)}</td>
+        <td>${manager ? escapeHtml(manager.name) : '<span style="color:var(--text-muted);">Unassigned</span>'}</td>
+        <td>${memberCount}</td>
+        <td>
+          <div class="row-actions">
+            <button class="icon-btn" onclick="openTeamModal('${team.id}')">Edit</button>
+            <button class="icon-btn" onclick="onDeleteTeam('${team.id}')">Delete</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function openTeamModal(id) {
+  const form = document.getElementById('teamForm');
+  form.reset();
+  document.getElementById('tm_id').value = '';
+
+  const editingTeam = id ? allTeams.find(t => t.id === id) : null;
+
+  // A Manager can only lead one team, so offer each available Manager once —
+  // whoever already leads the team being edited stays in the list too.
+  const managerSelect = document.getElementById('tm_manager');
+  const availableManagers = allUsers.filter(u =>
+    u.role === 'Manager' && (
+      !allTeams.some(t => t.managerId === u.id) ||
+      (editingTeam && editingTeam.managerId === u.id)
+    )
+  );
+  managerSelect.innerHTML = '<option value="">Unassigned</option>' +
+    availableManagers.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+
+  if (id) {
+    if (!editingTeam) return;
+    document.getElementById('teamModalTitle').textContent = 'Edit Team';
+    document.getElementById('tm_id').value = editingTeam.id;
+    document.getElementById('tm_name').value = editingTeam.name;
+    managerSelect.value = editingTeam.managerId || '';
+  } else {
+    document.getElementById('teamModalTitle').textContent = 'New Team';
+  }
+
+  openModal('teamModalBackdrop');
+}
+
+async function onSaveTeam(e) {
+  e.preventDefault();
+  const id = document.getElementById('tm_id').value;
+  const payload = {
+    name: document.getElementById('tm_name').value.trim(),
+    managerId: document.getElementById('tm_manager').value || null,
+  };
+
+  const result = id ? await updateTeam(id, payload) : await createTeam(payload);
+  if (!result.ok) {
+    showToast(result.error);
+    return;
+  }
+
+  closeModal('teamModalBackdrop');
+  await refreshAndRender();
+  showToast(id ? 'Team updated.' : 'Team created.');
+}
+
+async function onDeleteTeam(id) {
+  const team = allTeams.find(t => t.id === id);
+  if (!team) return;
+  const memberCount = allUsers.filter(u => u.teamId === team.id).length;
+  const warning = memberCount ? `${memberCount} member(s) will become unassigned. ` : '';
+  if (!confirm(`${warning}Delete "${team.name}"? This cannot be undone.`)) return;
+
+  const result = await deleteTeam(id);
+  if (!result.ok) {
+    showToast(result.error);
+    return;
+  }
+  await refreshAndRender();
+  showToast('Team deleted.');
 }
 
 /* ---------- Create / Edit modal ---------- */

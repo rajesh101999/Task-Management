@@ -53,7 +53,11 @@
       </button>
       <button type="button" class="nav-item" id="teamNavItem" data-tab="employeesView" style="display:none;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Team
+        People
+      </button>
+      <button type="button" class="nav-item" id="teamsNavItem" data-tab="teamsView" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Teams
       </button>
     </nav>
   </aside>
@@ -111,7 +115,7 @@
   <div id="employeesView" style="display:none;">
     <div class="panel">
       <div class="panel-header">
-        <h2>Team Members</h2>
+        <h2>People</h2>
         <div class="filters">
           <input type="text" id="employeeSearch" placeholder="Search...">
           <button class="btn btn-primary btn-sm" id="newEmployeeBtn">+ Add Member</button>
@@ -126,6 +130,7 @@
               <th>Email</th>
               <th>Role</th>
               <th>Division</th>
+              <th>Team</th>
               <th>Active Tasks</th>
               <th>Actions</th>
             </tr>
@@ -133,6 +138,31 @@
           <tbody id="employeeTableBody"></tbody>
         </table>
         <div id="employeeEmptyState" class="empty-state" style="display:none;">No team members yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="teamsView" style="display:none;">
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Teams</h2>
+        <div class="filters">
+          <button class="btn btn-primary btn-sm" id="newTeamBtn">+ New Team</button>
+        </div>
+      </div>
+      <div class="panel-body table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Team</th>
+              <th>Manager</th>
+              <th>Members</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="teamTableBody"></tbody>
+        </table>
+        <div id="teamEmptyState" class="empty-state" style="display:none;">No teams yet — create one to scope a Manager to their own people.</div>
       </div>
     </div>
   </div>
@@ -271,6 +301,12 @@
             <input type="text" id="e_division" required>
           </div>
         </div>
+        <div class="field" id="e_teamField" style="display:none;">
+          <label for="e_team">Team</label>
+          <select id="e_team">
+            <option value="">No team</option>
+          </select>
+        </div>
         <div class="field">
           <label for="e_name">Full Name</label>
           <input type="text" id="e_name" required>
@@ -290,6 +326,41 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-close="employeeModalBackdrop">Cancel</button>
         <button type="submit" class="btn btn-primary">Save Member</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Add / Edit Team Modal (Admin only) -->
+<div class="modal-backdrop" id="teamModalBackdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="teamModalTitle">New Team</h3>
+      <button class="modal-close" data-close="teamModalBackdrop">&times;</button>
+    </div>
+    <form id="teamForm">
+      <div class="modal-body">
+        <input type="hidden" id="tm_id">
+        <div class="field">
+          <label for="tm_name">Team Name</label>
+          <input type="text" id="tm_name" required placeholder="e.g. Design Team">
+        </div>
+        <div class="field">
+          <label for="tm_manager">Manager</label>
+          <select id="tm_manager">
+            <option value="">Unassigned</option>
+          </select>
+          <p style="color: var(--text-muted); font-size: 12px; margin: 6px 0 0;">
+            This Manager will only see this team's members and assignments.
+          </p>
+        </div>
+        <p style="color: var(--text-muted); font-size: 12px;">
+          Add or move members from the <strong>People</strong> tab — edit a member and set their Team.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close="teamModalBackdrop">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Team</button>
       </div>
     </form>
   </div>

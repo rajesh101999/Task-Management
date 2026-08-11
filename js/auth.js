@@ -10,6 +10,16 @@ function mapProfile(row) {
     email: row.email,
     role: row.role,
     division: row.division,
+    teamId: row.team_id,
+  };
+}
+
+function mapTeam(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    managerId: row.manager_id,
+    createdAt: row.created_at,
   };
 }
 
@@ -107,11 +117,49 @@ function getNextUserId(role, users) {
   return `${prefix}${String(next).padStart(3, '0')}`;
 }
 
+// ---------- Teams ----------
+// Admin-only: group Employees under a Manager. A Manager's own row in
+// `profiles` never gets a team_id (they aren't a "member" of a team, they
+// lead one) — a Manager's team is found via teams.manager_id instead.
+
+async function getTeams() {
+  const { data, error } = await sb.from('teams').select('*').order('name');
+  if (error) { console.error(error); return []; }
+  return data.map(mapTeam);
+}
+
+async function createTeam({ name, managerId }) {
+  const { data, error } = await sb.from('teams').insert({
+    name: name.trim(),
+    manager_id: managerId || null,
+  }).select().single();
+  if (error) { console.error(error); return { ok: false, error: error.message }; }
+  return { ok: true, team: mapTeam(data) };
+}
+
+async function updateTeam(id, changes) {
+  const dbChanges = {};
+  if (changes.name !== undefined) dbChanges.name = changes.name.trim();
+  if (changes.managerId !== undefined) dbChanges.manager_id = changes.managerId || null;
+
+  const { data, error } = await sb.from('teams').update(dbChanges).eq('id', id).select().single();
+  if (error) { console.error(error); return { ok: false, error: error.message }; }
+  return { ok: true, team: mapTeam(data) };
+}
+
+// Members keep their profile (just lose the team_id, via ON DELETE SET NULL)
+// — deleting a team never deletes people.
+async function deleteTeam(id) {
+  const { error } = await sb.from('teams').delete().eq('id', id);
+  if (error) { console.error(error); return { ok: false, error: error.message }; }
+  return { ok: true };
+}
+
 // Manager-initiated: create a Manager or Employee account directly from the
 // dashboard. (There is no self-service sign-up — accounts are only created
 // this way.) Signs the new account up on a second, memory-only Supabase
 // client so the Manager's own browser session is never disturbed.
-async function addTeamMember({ employeeId, name, email, password, role, division }) {
+async function addTeamMember({ employeeId, name, email, password, role, division, teamId }) {
   const users = await getUsers();
 
   let id = (employeeId || '').trim();
@@ -147,6 +195,7 @@ async function addTeamMember({ employeeId, name, email, password, role, division
     email: email.trim().toLowerCase(),
     role,
     division: division.trim() || 'General',
+    team_id: teamId || null,
   };
   const { error: profileError } = await sb.from('profiles').insert(profile);
   if (profileError) {
@@ -172,6 +221,7 @@ async function updateUser(id, changes, isSelf) {
   if (changes.name !== undefined) profileChanges.name = changes.name;
   if (changes.division !== undefined) profileChanges.division = changes.division;
   if (changes.role !== undefined) profileChanges.role = changes.role;
+  if (changes.teamId !== undefined) profileChanges.team_id = changes.teamId || null;
 
   if (isSelf) {
     const authChanges = {};
