@@ -43,6 +43,9 @@ async function boot() {
         updateHierarchyFieldsVisibility();
       });
     });
+    // Only Admin ever changes this field interactively (Manager/Employee
+    // have it pinned/hidden), but the listener is harmless either way.
+    document.getElementById('e_team').addEventListener('change', () => refreshSupervisorOptions());
   } else {
     document.getElementById('tableTitle').textContent = 'My Assignments';
     document.getElementById('workloadPanel').style.display = 'none';
@@ -451,14 +454,6 @@ function openEmployeeModal(id) {
   teamSelect.innerHTML = '<option value="">No team</option>' +
     allTeams.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
 
-  // Supervisor pool is always "the Employees I can see" (Admin: everyone;
-  // Manager: their own team; already scoped by RLS) — unlike the role
-  // radios, it doesn't depend on which role is currently selected, so it's
-  // safe to build once up front.
-  const supervisorSelect = document.getElementById('e_supervisor');
-  supervisorSelect.innerHTML = '<option value="">Unassigned</option>' +
-    allUsers.filter(u => u.role === 'Employee').map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join('');
-
   if (id) {
     const member = allUsers.find(u => u.id === id);
     if (!member) return;
@@ -473,7 +468,7 @@ function openEmployeeModal(id) {
     document.getElementById('e_password').required = false;
     roleRadios.forEach(r => { r.checked = r.value === member.role; });
     teamSelect.value = member.teamId || '';
-    supervisorSelect.value = member.supervisorId || '';
+    refreshSupervisorOptions(member.supervisorId);
 
     const isSelf = member.id === session.id;
     if (isSelf) {
@@ -500,7 +495,7 @@ function openEmployeeModal(id) {
     document.getElementById('employeeHint').textContent = "Share the email and password with them — they'll use them to sign in.";
     roleRadios.forEach(r => { r.checked = r.value === allowedRoles[0]; });
     teamSelect.value = session.role === 'Manager' ? (myTeamId || '') : '';
-    supervisorSelect.value = session.role === 'Employee' ? session.id : '';
+    refreshSupervisorOptions();
     updateEmployeeIdPlaceholder();
   }
 
@@ -511,6 +506,26 @@ function openEmployeeModal(id) {
 function updateEmployeeIdPlaceholder() {
   const role = document.querySelector('input[name="e_role"]:checked').value;
   document.getElementById('e_employeeId').placeholder = getNextUserId(role, allUsers);
+}
+
+// Rebuilds the Supervisor dropdown to just the Employees on whichever team
+// is currently selected (Admin: the live value of the Team field; Manager/
+// Employee: their own team, since their Team field is pinned/hidden) — a
+// supervisor should always be a teammate of the person they supervise, not
+// someone from a different team. Called on modal open and whenever the Team
+// field changes. `preserveId`, if it's still in the rebuilt pool, stays
+// selected; otherwise the field resets to "Unassigned" (e.g. after picking
+// a different team, the old supervisor no longer belongs to it).
+function refreshSupervisorOptions(preserveId) {
+  const teamId = session.role === 'Admin'
+    ? (document.getElementById('e_team').value || null)
+    : (session.role === 'Manager' ? myTeamId : session.teamId);
+  const pool = allUsers.filter(u => u.role === 'Employee' && u.teamId === teamId);
+
+  const supervisorSelect = document.getElementById('e_supervisor');
+  supervisorSelect.innerHTML = '<option value="">Unassigned</option>' +
+    pool.map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join('');
+  supervisorSelect.value = pool.some(u => u.id === preserveId) ? preserveId : '';
 }
 
 // The Team field only makes sense for roles that carry a team_id
