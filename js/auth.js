@@ -11,6 +11,7 @@ function mapProfile(row) {
     role: row.role,
     division: row.division,
     teamId: row.team_id,
+    supervisorId: row.supervisor_id,
   };
 }
 
@@ -43,6 +44,7 @@ async function getSession() {
     role: profile.role,
     division: profile.division,
     teamId: profile.team_id,
+    supervisorId: profile.supervisor_id,
   };
 }
 
@@ -94,21 +96,52 @@ async function getEmployees() {
   return users.filter(u => u.role === 'Employee');
 }
 
-// Roles with full (Manager-level) access to the dashboard — Team tab,
-// creating/editing/deleting any assignment or team member, etc. Admin is a
-// superset alongside Manager rather than a replacement for it.
+// Org chart, top to bottom: Admin > Manager (leads a Team) > Employee
+// (member of a Team) > Intern/External (reports to one Employee, via
+// supervisor_id). Each tier gets "manager-style" dashboard access — create/
+// edit/delete assignments, manage People rows, see workload — scoped down
+// to whoever reports to them (RLS enforces the actual scoping; this just
+// says who gets the UI for it at all). Admin is a superset alongside
+// Manager/Employee rather than a replacement for either.
 function hasFullAccess(role) {
-  return role === 'Manager' || role === 'Admin';
+  return role === 'Manager' || role === 'Admin' || role === 'Employee';
 }
 
-// Everyone else: Employee, Intern, External. Each can be assigned work,
-// belongs to a team, and only ever sees their own assignments (enforced by
-// RLS) — identical access, just a different label for org-chart purposes.
-// Named as the inverse of hasFullAccess so a future addition to either
-// group can't quietly fall through the cracks between the two.
+// The bottom of the chart: Intern, External. Each can be assigned work and
+// only ever sees their own assignments (enforced by RLS) — identical access
+// to each other, just a different label for org-chart purposes. Named as
+// the inverse of hasFullAccess so a future addition to either group can't
+// quietly fall through the cracks between the two.
 function isStaffRole(role) {
   return !hasFullAccess(role);
 }
+
+// Roles that do hands-on assignment work, regardless of whether they also
+// supervise anyone: Employee, Intern, External (i.e. not Manager/Admin).
+// Distinct from isStaffRole, which narrowed to just Intern/External once
+// Employee gained hasFullAccess — this is for places that still mean "the
+// whole front line" (e.g. a Team Workload panel), not "who lacks full
+// access".
+function isWorkerRole(role) {
+  return role === 'Employee' || role === 'Intern' || role === 'External';
+}
+
+// Roles that carry a team_id (they belong to a Manager's Team).
+const TEAM_ROLES = ['Employee', 'Intern', 'External'];
+
+// Roles that carry a supervisor_id (they report to one specific Employee).
+const SUPERVISED_ROLES = ['Intern', 'External'];
+
+// Which roles each hasFullAccess tier is allowed to create/edit people
+// into, from the Add/Edit Member modal. Mirrors the role checks baked into
+// the profiles_insert/profiles_update RLS policies (supabase/migrations/
+// 2026-08-12_employee-supervisors.sql) — this list is what the UI offers;
+// the database is what actually enforces it.
+const CREATABLE_ROLES = {
+  Admin: ['Employee', 'Intern', 'External', 'Manager', 'Admin'],
+  Manager: ['Employee', 'Intern', 'External'],
+  Employee: ['Intern', 'External'],
+};
 
 const ID_PREFIXES = { Manager: 'MGR', Admin: 'ADM', Intern: 'INT', External: 'EXT' };
 
@@ -169,7 +202,7 @@ async function deleteTeam(id) {
 // dashboard. (There is no self-service sign-up — accounts are only created
 // this way.) Signs the new account up on a second, memory-only Supabase
 // client so the Manager's own browser session is never disturbed.
-async function addTeamMember({ employeeId, name, email, password, role, division, teamId }) {
+async function addTeamMember({ employeeId, name, email, password, role, division, teamId, supervisorId }) {
   const users = await getUsers();
 
   let id = (employeeId || '').trim();
@@ -206,6 +239,7 @@ async function addTeamMember({ employeeId, name, email, password, role, division
     role,
     division: division.trim() || 'General',
     team_id: teamId || null,
+    supervisor_id: supervisorId || null,
   };
   const { error: profileError } = await sb.from('profiles').insert(profile);
   if (profileError) {
@@ -232,6 +266,7 @@ async function updateUser(id, changes, isSelf) {
   if (changes.division !== undefined) profileChanges.division = changes.division;
   if (changes.role !== undefined) profileChanges.role = changes.role;
   if (changes.teamId !== undefined) profileChanges.team_id = changes.teamId || null;
+  if (changes.supervisorId !== undefined) profileChanges.supervisor_id = changes.supervisorId || null;
 
   if (isSelf) {
     const authChanges = {};

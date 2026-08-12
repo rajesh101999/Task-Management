@@ -137,6 +137,7 @@
               <th>Role</th>
               <th>Division</th>
               <th>Team</th>
+              <th>Reports To</th>
               <th>Active Tasks</th>
               <th>Actions</th>
             </tr>
@@ -313,6 +314,12 @@
           <label for="e_team">Team</label>
           <select id="e_team">
             <option value="">No team</option>
+          </select>
+        </div>
+        <div class="field" id="e_supervisorField" style="display:none;">
+          <label for="e_supervisor">Supervisor (Employee)</label>
+          <select id="e_supervisor">
+            <option value="">Unassigned</option>
           </select>
         </div>
         <div class="field">

@@ -29,8 +29,9 @@ async function boot() {
     document.getElementById('newTaskBtn').style.display = 'inline-flex';
     document.getElementById('tableTitle').textContent = 'All Assignments';
     document.getElementById('teamNavItem').style.display = 'flex';
-    // Employees only ever see their own tasks anyway; a Manager/Admin sees
-    // their team's/everyone's, so this toggle is what gets them "my tasks".
+    // Intern/External only ever see their own tasks anyway; everyone with
+    // full access sees a wider set (their reports'/team's/everyone's), so
+    // this toggle is what gets them back to just "my tasks".
     document.getElementById('myTasksWrap').style.display = 'flex';
     document.getElementById('newEmployeeBtn').addEventListener('click', () => openEmployeeModal());
     document.getElementById('employeeForm').addEventListener('submit', onSaveEmployee);
@@ -39,7 +40,7 @@ async function boot() {
     document.querySelectorAll('input[name="e_role"]').forEach(r => {
       r.addEventListener('change', () => {
         updateEmployeeIdPlaceholder();
-        updateTeamFieldVisibility();
+        updateHierarchyFieldsVisibility();
       });
     });
   } else {
@@ -141,10 +142,11 @@ function appendOptionGroup(select, label, users) {
   select.appendChild(group);
 }
 
-// A Manager can only hand work to their own team's staff — Employee,
-// Intern, or External (allUsers is already scoped that way by RLS). Admin
-// can additionally assign to a Manager — each role gets its own group in
-// the dropdown so they're easy to tell apart at a glance.
+// Each hasFullAccess tier can only hand work to whoever reports to them
+// (allUsers is already scoped that way by RLS): a Manager to their team's
+// Employees/Interns/Externals, an Employee to just their own Interns/
+// Externals, an Admin to anyone. Each role gets its own group in the
+// dropdown so they're easy to tell apart at a glance.
 function fillEmployeeOptions() {
   const select = document.getElementById('f_assignedTo');
   select.innerHTML = '';
@@ -152,14 +154,20 @@ function fillEmployeeOptions() {
   if (session.role === 'Admin') {
     appendOptionGroup(select, 'Managers', allUsers.filter(u => u.role === 'Manager'));
   }
-  appendOptionGroup(select, 'Employees', allUsers.filter(u => u.role === 'Employee'));
+  // Employees group only makes sense for the tiers that supervise Employees
+  // (Manager/Admin) — showing it to an Employee session would just repeat
+  // their own row (already added as "Me" below) under a confusing label.
+  if (session.role === 'Admin' || session.role === 'Manager') {
+    appendOptionGroup(select, 'Employees', allUsers.filter(u => u.role === 'Employee'));
+  }
   appendOptionGroup(select, 'Interns', allUsers.filter(u => u.role === 'Intern'));
   appendOptionGroup(select, 'External', allUsers.filter(u => u.role === 'External'));
 
-  // Neither branch above includes the signed-in Manager/Admin themselves
-  // (a Manager isn't an Employee; Admin is in neither group), so a
-  // Manager/Admin could never assign work to their own name. Add "Me" up
-  // front so they can create a task for themselves too.
+  // None of the groups above include the signed-in person themselves (an
+  // Employee isn't in the "Employees" group they see, a Manager isn't an
+  // Employee, Admin is in none of them), so they could never assign work to
+  // their own name. Add "Me" up front so they can create a task for
+  // themselves too.
   if (hasFullAccess(session.role)) {
     const me = allUsers.find(u => u.id === session.id);
     if (me) {
@@ -224,15 +232,15 @@ function renderAll() {
 }
 
 // Small always-visible badge in the header showing which team the signed-in
-// person is scoped to: the team a Manager leads, or the team their own
-// staff role (Employee/Intern/External) belongs to. Admin isn't scoped to
-// a single team, so nothing shows for them.
+// person is scoped to: the team a Manager leads, or the team their own role
+// (Employee/Intern/External) belongs to. Admin isn't scoped to a single
+// team, so nothing shows for them.
 function renderHeaderTeam() {
   const badge = document.getElementById('headerTeamBadge');
   let name = null;
   if (session.role === 'Manager') {
     name = myTeamId ? teamName(myTeamId) : null;
-  } else if (isStaffRole(session.role)) {
+  } else if (TEAM_ROLES.includes(session.role)) {
     name = session.teamId ? teamName(session.teamId) : null;
   }
   badge.textContent = name || '';
@@ -301,9 +309,10 @@ function renderTable() {
 
   tbody.innerHTML = tasks.map(t => {
     const overdue = isOverdue(t);
-    // Employees can create tasks for themselves (t.assignedBy === them); those
-    // get the same Edit/Delete as a Manager/Admin gets. Manager-assigned work
-    // only ever gets "Update" (status/progress/comments via the detail modal).
+    // Intern/External can create tasks for themselves (t.assignedBy ===
+    // them); those get the same Edit/Delete as anyone with full access
+    // gets. Work assigned to them by someone else only ever gets "Update"
+    // (status/progress/comments via the detail modal).
     const isOwnTask = !hasFullAccess(session.role) && t.assignedBy === session.id;
     let actions;
     if (hasFullAccess(session.role)) {
@@ -336,7 +345,12 @@ function renderTable() {
 }
 
 function renderWorkload() {
-  const employees = allUsers.filter(u => isStaffRole(u.role));
+  // isWorkerRole (not isStaffRole) because a Manager's panel should still
+  // include their Employees, and excluding session.id keeps an Employee's
+  // own panel from listing themselves alongside their Interns/Externals —
+  // isStaffRole alone used to be enough for this (Employee wasn't a
+  // possible viewer), but now that Employee has hasFullAccess it isn't.
+  const employees = allUsers.filter(u => isWorkerRole(u.role) && u.id !== session.id);
   const body = document.getElementById('workloadBody');
 
   if (!employees.length) {
@@ -350,9 +364,9 @@ function renderWorkload() {
   }).join('');
 }
 
-// Active-work count shown per row: what an Employee is doing, or what a
-// Manager/Admin currently has open (assignments they created that aren't
-// wrapped up).
+// Active-work count shown per row: what an Intern/External is doing, or
+// what anyone with full access (Employee/Manager/Admin) currently has open
+// (assignments they created that aren't wrapped up yet).
 function activeCountFor(user, tasks) {
   return hasFullAccess(user.role)
     ? tasks.filter(t => t.assignedBy === user.id && !['Completed', 'Cancelled'].includes(t.status)).length
@@ -386,6 +400,7 @@ function renderEmployees() {
         <td><span class="pill pill-role-${member.role}">${member.role}</span></td>
         <td>${escapeHtml(member.division)}</td>
         <td>${escapeHtml(teamName(member.teamId))}</td>
+        <td>${escapeHtml(ownerName(member.supervisorId, allUsers))}</td>
         <td>${activeCountFor(member, allTasks)}</td>
         <td>
           <div class="row-actions">
@@ -420,13 +435,29 @@ function openEmployeeModal(id) {
   document.getElementById('e_email').disabled = false;
   document.getElementById('e_password').disabled = false;
 
+  // Only offer the roles this session is actually allowed to save (mirrors
+  // CREATABLE_ROLES / the profiles_insert & profiles_update RLS policies) —
+  // e.g. an Employee only ever adds Interns/Externals, never another
+  // Employee or a Manager.
   const roleRadios = document.querySelectorAll('input[name="e_role"]');
-  roleRadios.forEach(r => { r.disabled = false; });
+  const allowedRoles = CREATABLE_ROLES[session.role] || [];
+  roleRadios.forEach(r => {
+    r.disabled = false;
+    r.closest('label').style.display = allowedRoles.includes(r.value) ? '' : 'none';
+  });
   document.getElementById('e_selfRoleHint').style.display = 'none';
 
   const teamSelect = document.getElementById('e_team');
   teamSelect.innerHTML = '<option value="">No team</option>' +
     allTeams.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+
+  // Supervisor pool is always "the Employees I can see" (Admin: everyone;
+  // Manager: their own team; already scoped by RLS) — unlike the role
+  // radios, it doesn't depend on which role is currently selected, so it's
+  // safe to build once up front.
+  const supervisorSelect = document.getElementById('e_supervisor');
+  supervisorSelect.innerHTML = '<option value="">Unassigned</option>' +
+    allUsers.filter(u => u.role === 'Employee').map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join('');
 
   if (id) {
     const member = allUsers.find(u => u.id === id);
@@ -442,11 +473,15 @@ function openEmployeeModal(id) {
     document.getElementById('e_password').required = false;
     roleRadios.forEach(r => { r.checked = r.value === member.role; });
     teamSelect.value = member.teamId || '';
+    supervisorSelect.value = member.supervisorId || '';
 
     const isSelf = member.id === session.id;
     if (isSelf) {
-      // Editing yourself: keep everything editable except the role you're currently using.
-      roleRadios.forEach(r => { r.disabled = true; });
+      // Editing yourself: keep everything editable except the role you're
+      // currently using — always show every role's radio here (even ones
+      // this session couldn't newly assign to someone else) so your own
+      // current role never disappears from view.
+      roleRadios.forEach(r => { r.disabled = true; r.closest('label').style.display = ''; });
       document.getElementById('e_selfRoleHint').style.display = 'block';
       document.getElementById('employeeHint').textContent = "Share the email and password with them — they'll use them to sign in.";
     } else {
@@ -463,12 +498,13 @@ function openEmployeeModal(id) {
     document.getElementById('e_division').value = session.division || '';
     document.getElementById('e_password').placeholder = 'Set a login password';
     document.getElementById('employeeHint').textContent = "Share the email and password with them — they'll use them to sign in.";
-    roleRadios.forEach(r => { r.checked = r.value === 'Employee'; });
+    roleRadios.forEach(r => { r.checked = r.value === allowedRoles[0]; });
     teamSelect.value = session.role === 'Manager' ? (myTeamId || '') : '';
+    supervisorSelect.value = session.role === 'Employee' ? session.id : '';
     updateEmployeeIdPlaceholder();
   }
 
-  updateTeamFieldVisibility();
+  updateHierarchyFieldsVisibility();
   openModal('employeeModalBackdrop');
 }
 
@@ -477,14 +513,24 @@ function updateEmployeeIdPlaceholder() {
   document.getElementById('e_employeeId').placeholder = getNextUserId(role, allUsers);
 }
 
-// The Team picker only makes sense for staff accounts (Employee/Intern/
-// External), and only Admin gets to choose freely — a Manager adding their
-// own hire is silently pinned to the team they lead (see onSaveEmployee),
-// so the field would just be a confusing no-op for them.
-function updateTeamFieldVisibility() {
+// The Team field only makes sense for roles that carry a team_id
+// (Employee/Intern/External), and only Admin gets to choose freely — a
+// Manager/Employee adding their own hire is silently pinned to their own
+// team (see onSaveEmployee), so the field would just be a confusing no-op
+// for them.
+//
+// The Supervisor field only makes sense for roles that carry a
+// supervisor_id (Intern/External), and only Admin/Manager choose it
+// explicitly — an Employee adding their own hire is silently pinned as the
+// supervisor.
+function updateHierarchyFieldsVisibility() {
   const role = document.querySelector('input[name="e_role"]:checked').value;
-  const show = session.role === 'Admin' && isStaffRole(role);
-  document.getElementById('e_teamField').style.display = show ? 'block' : 'none';
+
+  const showTeam = session.role === 'Admin' && TEAM_ROLES.includes(role);
+  document.getElementById('e_teamField').style.display = showTeam ? 'block' : 'none';
+
+  const showSupervisor = (session.role === 'Admin' || session.role === 'Manager') && SUPERVISED_ROLES.includes(role);
+  document.getElementById('e_supervisorField').style.display = showSupervisor ? 'block' : 'none';
 }
 
 async function onSaveEmployee(e) {
@@ -500,16 +546,28 @@ async function onSaveEmployee(e) {
     role: document.querySelector('input[name="e_role"]:checked').value,
   };
 
-  // Only staff (Employee/Intern/External) carry a team_id (a Manager's
-  // "team" is the team that names them as manager, not something on their
-  // own profile). Admin picks freely from the dropdown; a Manager adding
-  // their own hire is silently pinned to the team they lead.
-  if (isStaffRole(payload.role)) {
-    payload.teamId = session.role === 'Admin'
-      ? (document.getElementById('e_team').value || null)
-      : (myTeamId || null);
+  // Only Employee/Intern/External carry a team_id (a Manager's "team" is
+  // the team that names them as manager, not something on their own
+  // profile). Admin picks freely from the dropdown; a Manager adding their
+  // own hire is silently pinned to the team they lead; an Employee adding
+  // their own hire inherits the team they're already a member of.
+  if (TEAM_ROLES.includes(payload.role)) {
+    if (session.role === 'Admin') payload.teamId = document.getElementById('e_team').value || null;
+    else if (session.role === 'Manager') payload.teamId = myTeamId || null;
+    else payload.teamId = session.teamId || null;
   } else if (!isSelf) {
     payload.teamId = null;
+  }
+
+  // Only Intern/External carry a supervisor_id (which Employee they report
+  // to). Admin/Manager pick it explicitly from the dropdown; an Employee
+  // adding their own hire is silently pinned as the supervisor.
+  if (SUPERVISED_ROLES.includes(payload.role)) {
+    payload.supervisorId = session.role === 'Employee'
+      ? session.id
+      : (document.getElementById('e_supervisor').value || null);
+  } else if (!isSelf) {
+    payload.supervisorId = null;
   }
 
   let result;
@@ -701,7 +759,7 @@ function openTaskModal(id) {
   document.getElementById('taskId').value = '';
   const assignedToSelect = document.getElementById('f_assignedTo');
   const assignedToLabel = document.querySelector('label[for="f_assignedTo"]');
-  const isManager = hasFullAccess(session.role);
+  const canAssignOthers = hasFullAccess(session.role);
 
   if (id) {
     const task = allTasks.find(t => t.id === id);
@@ -719,19 +777,21 @@ function openTaskModal(id) {
     document.getElementById('f_status').value = task.status;
     document.getElementById('f_remarks').value = task.remarks || '';
   } else {
-    document.getElementById('taskModalTitle').textContent = isManager ? 'New Assignment' : 'New Task';
+    document.getElementById('taskModalTitle').textContent = canAssignOthers ? 'New Assignment' : 'New Task';
     document.getElementById('f_division').value = session.division || '';
     document.getElementById('f_status').value = 'Pending';
   }
 
-  // Employees can only ever create/keep tasks assigned to themselves — they
-  // can't hand work to (or take work from) someone else via this form.
-  // Admin's list includes Managers as well as Employees, so "Assigned
-  // Employee" would undersell it — a plain Manager still only ever assigns
-  // to their own team's Employees, so that label still fits for them.
-  assignedToLabel.textContent = session.role === 'Admin' ? 'Assigned To' : (isManager ? 'Assigned Employee' : 'Assigned To');
-  assignedToSelect.disabled = !isManager;
-  if (!isManager) assignedToSelect.value = session.id;
+  // Intern/External can only ever create/keep tasks assigned to themselves
+  // — they can't hand work to (or take work from) someone else via this
+  // form. A plain Manager still only ever assigns to their own team's
+  // Employees, so "Assigned Employee" fits for them specifically; everyone
+  // else's pool is mixed (Admin: Managers+Employees+Interns+External;
+  // Employee: Interns+External) or single-person, so the generic label fits
+  // better.
+  assignedToLabel.textContent = session.role === 'Manager' ? 'Assigned Employee' : 'Assigned To';
+  assignedToSelect.disabled = !canAssignOthers;
+  if (!canAssignOthers) assignedToSelect.value = session.id;
 
   openModal('taskModalBackdrop');
 }

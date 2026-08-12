@@ -1,7 +1,8 @@
-// reset-password — lets a Manager or Admin set a new password for one of
-// their people. This can only happen server-side: Supabase Auth only lets
-// an account change its *own* password from browser code (see updateUser
-// in js/auth.js) — changing someone else's requires the service_role key,
+// reset-password — lets an Employee, Manager, or Admin set a new password
+// for one of their people (whoever reports to them on the org chart — see
+// README.md). This can only happen server-side: Supabase Auth only lets an
+// account change its *own* password from browser code (see updateUser in
+// js/auth.js) — changing someone else's requires the service_role key,
 // which must never be shipped to the browser. This function holds that key
 // instead, and is the one place it's allowed to exist.
 //
@@ -49,13 +50,14 @@ Deno.serve(async (req) => {
     if (callerErr || !caller) return json({ error: 'Not authenticated.' }, 401);
 
     const { data: callerProfile } = await callerClient.from('profiles').select('role').eq('id', caller.id).single();
-    if (!callerProfile || !['Admin', 'Manager'].includes(callerProfile.role)) {
-      return json({ error: 'Only a Manager or Admin can reset a password.' }, 403);
+    if (!callerProfile || !['Admin', 'Manager', 'Employee'].includes(callerProfile.role)) {
+      return json({ error: 'Only an Employee, Manager, or Admin can reset a password.' }, 403);
     }
 
     // Authorization check, piggy-backing on the profiles RLS policy instead
     // of duplicating it: Admin can select any profile, a Manager only their
-    // own team's (plus themselves). If this select comes back empty, the
+    // own team's (plus themselves), an Employee only their own Interns/
+    // Externals (plus themselves). If this select comes back empty, the
     // caller has no business touching that account.
     const { data: target } = await callerClient.from('profiles').select('id').eq('id', userId).single();
     if (!target) return json({ error: "You don't have access to that account." }, 403);
