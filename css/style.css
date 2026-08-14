@@ -98,6 +98,13 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
 }
 
+.field input[readonly],
+.field input:disabled {
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
 .password-wrap {
   position: relative;
 }

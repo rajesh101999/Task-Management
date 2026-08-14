@@ -796,7 +796,12 @@ function openTaskModal(id) {
     assignedToSelect.value = task.assignedTo;
     document.getElementById('f_startDate').value = task.startDate;
     document.getElementById('f_dueDate').value = task.dueDate;
-    document.getElementById('f_estimatedTime').value = task.estimatedTime || '';
+    // f_estimatedTime is a number input; older assignments stored this as
+    // free text ("8 hrs", "1 hr.", ...), so pull out just the leading
+    // number rather than setting it verbatim (a non-numeric string is
+    // simply rejected by a number input, leaving it blank).
+    const estMatch = /^[\d.]+/.exec(task.estimatedTime || '');
+    document.getElementById('f_estimatedTime').value = estMatch ? estMatch[0] : '';
     document.getElementById('f_status').value = task.status;
     document.getElementById('f_remarks').value = task.remarks || '';
   } else {
@@ -823,6 +828,11 @@ async function onSaveTask(e) {
   e.preventDefault();
   const id = document.getElementById('taskId').value;
 
+  // f_estimatedTime is just a bare number of hours now; store it the same
+  // "N hrs" shape older free-text entries already used, so the Time column
+  // reads consistently regardless of when an assignment was created.
+  const estimatedHours = document.getElementById('f_estimatedTime').value.trim();
+
   const payload = {
     division: document.getElementById('f_division').value.trim(),
     priority: document.getElementById('f_priority').value,
@@ -831,7 +841,7 @@ async function onSaveTask(e) {
     assignedTo: hasFullAccess(session.role) ? document.getElementById('f_assignedTo').value : session.id,
     startDate: document.getElementById('f_startDate').value,
     dueDate: document.getElementById('f_dueDate').value,
-    estimatedTime: document.getElementById('f_estimatedTime').value.trim(),
+    estimatedTime: estimatedHours ? `${estimatedHours} hrs` : '',
     status: document.getElementById('f_status').value,
     remarks: document.getElementById('f_remarks').value.trim(),
   };
