@@ -85,6 +85,16 @@ async function boot() {
     btn.addEventListener('click', () => closeModal(btn.dataset.close));
   });
 
+  // Clicking the dimmed backdrop (anywhere outside the modal card itself)
+  // closes it, same as the × button. e.target is only the backdrop element
+  // when the click didn't land on a descendant (the .modal card), so this
+  // never fires for clicks inside the form.
+  document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) closeModal(backdrop.id);
+    });
+  });
+
   await refreshData();
   fillEmployeeOptions();
   renderAll();
@@ -319,7 +329,7 @@ function renderTable() {
     const isOwnTask = !hasFullAccess(session.role) && t.assignedBy === session.id;
     let actions;
     if (hasFullAccess(session.role)) {
-      actions = `<button class="icon-btn" onclick="openDetailModal(${t.id})">View</button>
+      actions = `<button class="icon-btn" onclick="openDetailModal(${t.id})">Update</button>
          <button class="icon-btn" onclick="openTaskModal(${t.id})">Edit</button>
          <button class="icon-btn" onclick="onDeleteTask(${t.id})">Delete</button>`;
     } else if (isOwnTask) {
@@ -340,7 +350,7 @@ function renderTable() {
         <td>${escapeHtml(t.estimatedTime || '—')}</td>
         <td>${formatDate(t.startDate)}</td>
         <td class="${overdue ? 'overdue-text' : ''}">${formatDate(t.dueDate)}${overdue ? ' ⚠' : ''}</td>
-        <td><span class="progress-bar"><span style="width:${t.progress}%"></span></span>${t.progress}%</td>
+        <td>${t.progress}%</td>
         <td><div class="row-actions">${actions}</div></td>
       </tr>
     `;

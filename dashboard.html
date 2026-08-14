@@ -10,7 +10,10 @@
 
 <header class="top-header">
   <div class="brand">
-    <img src="assets/logo.png" alt="Cranes Varsity" class="header-logo"> Task Manager
+    <img src="assets/logo.png" alt="Cranes Varsity" class="header-logo">
+  </div>
+  <div class="brand-center">
+    <span class="brand-title">Task Manager</span>
     <span id="headerTeamBadge" class="header-team-badge" style="display:none;"></span>
   </div>
   <div class="header-actions">
@@ -191,7 +194,7 @@
         <div class="grid-2">
           <div class="field">
             <label for="f_division">Division</label>
-            <input type="text" id="f_division" required>
+            <input type="text" id="f_division" required="readonly=">
           </div>
           <div class="field">
             <label for="f_priority">Priority</label>
@@ -223,7 +226,7 @@
         <div class="grid-2">
           <div class="field">
             <label for="f_estimatedTime">Estimated Time</label>
-            <input type="text" id="f_estimatedTime" placeholder="e.g. 8 hrs">
+            <input type="number" id="f_estimatedTime" placeholder="e.g. 8 hrs">
           </div>
           <div class="field">
             <label for="f_status">Status</label>
