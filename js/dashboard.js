@@ -33,6 +33,7 @@ async function boot() {
     // full access sees a wider set (their reports'/team's/everyone's), so
     // this toggle is what gets them back to just "my tasks".
     document.getElementById('myTasksWrap').style.display = 'flex';
+    document.getElementById('reportMyTasksWrap').style.display = 'flex';
     document.getElementById('newEmployeeBtn').addEventListener('click', () => openEmployeeModal());
     document.getElementById('employeeForm').addEventListener('submit', onSaveEmployee);
     document.getElementById('employeeSearch').addEventListener('input', renderEmployees);
@@ -64,6 +65,8 @@ async function boot() {
 
   fillOptions(document.getElementById('filterStatus'), STATUSES, true);
   fillOptions(document.getElementById('filterPriority'), PRIORITIES, true);
+  fillOptions(document.getElementById('reportFilterStatus'), STATUSES, true);
+  fillOptions(document.getElementById('reportFilterPriority'), PRIORITIES, true);
   fillOptions(document.getElementById('f_priority'), PRIORITIES, false);
   fillOptions(document.getElementById('f_status'), STATUSES, false);
   fillOptions(document.getElementById('detailStatus'), STATUSES, false);
@@ -72,7 +75,11 @@ async function boot() {
   document.getElementById('filterPriority').addEventListener('change', renderAll);
   document.getElementById('filterMine').addEventListener('change', renderAll);
   document.getElementById('filterSearch').addEventListener('input', renderAll);
-  document.getElementById('exportBtn').addEventListener('click', onExport);
+  document.getElementById('reportFilterStatus').addEventListener('change', renderReportTable);
+  document.getElementById('reportFilterPriority').addEventListener('change', renderReportTable);
+  document.getElementById('reportFilterMine').addEventListener('change', renderReportTable);
+  document.getElementById('reportFilterSearch').addEventListener('input', renderReportTable);
+  document.getElementById('reportExportBtn').addEventListener('click', onExport);
   document.getElementById('newTaskBtn').addEventListener('click', () => openTaskModal());
   document.getElementById('taskForm').addEventListener('submit', onSaveTask);
   document.getElementById('saveStatusBtn').addEventListener('click', onSaveStatus);
@@ -213,12 +220,7 @@ function visibleTasks() {
   return allTasks;
 }
 
-function filteredTasks() {
-  const status = document.getElementById('filterStatus').value;
-  const priority = document.getElementById('filterPriority').value;
-  const search = document.getElementById('filterSearch').value.trim().toLowerCase();
-  const mineOnly = hasFullAccess(session.role) && document.getElementById('filterMine').checked;
-
+function filterTasksList(status, priority, mineOnly, search) {
   return visibleTasks().filter(t => {
     if (status && t.status !== status) return false;
     if (priority && t.priority !== priority) return false;
@@ -228,11 +230,31 @@ function filteredTasks() {
   });
 }
 
+function filteredTasks() {
+  const status = document.getElementById('filterStatus').value;
+  const priority = document.getElementById('filterPriority').value;
+  const search = document.getElementById('filterSearch').value.trim().toLowerCase();
+  const mineOnly = hasFullAccess(session.role) && document.getElementById('filterMine').checked;
+  return filterTasksList(status, priority, mineOnly, search);
+}
+
+// Mirrors filteredTasks() but reads the Reports tab's own filter controls —
+// Reports has no live table, so its filters are independent of the
+// Assignments tab's (changing one shouldn't silently change the other).
+function filteredReportTasks() {
+  const status = document.getElementById('reportFilterStatus').value;
+  const priority = document.getElementById('reportFilterPriority').value;
+  const search = document.getElementById('reportFilterSearch').value.trim().toLowerCase();
+  const mineOnly = hasFullAccess(session.role) && document.getElementById('reportFilterMine').checked;
+  return filterTasksList(status, priority, mineOnly, search);
+}
+
 /* ---------- Render ---------- */
 
 function renderAll() {
   renderKPIs();
   renderTable();
+  renderReportTable();
   if (hasFullAccess(session.role)) {
     renderWorkload();
     renderEmployees();
@@ -267,6 +289,7 @@ function switchTab(tabId) {
   });
   document.getElementById('assignmentsView').style.display = tabId === 'assignmentsView' ? 'block' : 'none';
   document.getElementById('employeesView').style.display = tabId === 'employeesView' ? 'block' : 'none';
+  document.getElementById('reportsView').style.display = tabId === 'reportsView' ? 'block' : 'none';
   document.getElementById('teamsView').style.display = tabId === 'teamsView' ? 'block' : 'none';
 }
 
@@ -350,6 +373,40 @@ function renderTable() {
         <td class="${overdue ? 'overdue-text' : ''}">${formatDate(t.dueDate)}${overdue ? ' ⚠' : ''}</td>
         <td>${t.progress}%</td>
         <td><div class="row-actions">${actions}</div></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Read-only preview of whatever the Reports filters currently match — same
+// row shape as the Assignments table (minus Actions, since nothing here is
+// editable) so what's on screen is exactly what Export Excel will write out.
+function renderReportTable() {
+  const tasks = filteredReportTasks().sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const tbody = document.getElementById('reportTableBody');
+  const empty = document.getElementById('reportEmptyState');
+  if (!tbody) return;
+
+  if (!tasks.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = tasks.map(t => {
+    const overdue = isOverdue(t);
+    return `
+      <tr>
+        <td>${escapeHtml(t.division)}</td>
+        <td>${escapeHtml(t.title)}</td>
+        <td>${escapeHtml(ownerName(t.assignedTo, allUsers))}</td>
+        <td><span class="pill ${statusClass(t.status)}">${t.status}</span></td>
+        <td><span class="pill ${statusClass(t.priority)}">${t.priority}</span></td>
+        <td>${escapeHtml(t.estimatedTime || '—')}</td>
+        <td>${formatDate(t.startDate)}</td>
+        <td class="${overdue ? 'overdue-text' : ''}">${formatDate(t.dueDate)}${overdue ? ' ⚠' : ''}</td>
+        <td>${t.progress}%</td>
       </tr>
     `;
   }).join('');
@@ -914,7 +971,7 @@ async function onSaveStatus() {
 /* ---------- Export ---------- */
 
 function onExport() {
-  exportTasksToExcel(filteredTasks(), 'assignments.xlsx', allUsers);
+  exportTasksToExcel(filteredReportTasks(), 'assignments.xlsx', allUsers);
 }
 
 /* ---------- Modal helpers ---------- */

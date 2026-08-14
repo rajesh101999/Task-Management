@@ -61,6 +61,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         People
       </button>
+      <button type="button" class="nav-item" data-tab="reportsView">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Reports
+      </button>
       <button type="button" class="nav-item" id="teamsNavItem" data-tab="teamsView" style="display:none;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
         Teams
@@ -94,7 +98,6 @@
             <input type="checkbox" id="filterMine"> My Tasks Only
           </label>
           <input type="text" id="filterSearch" placeholder="Search...">
-          <button class="btn btn-secondary btn-sm" id="exportBtn">Export Excel</button>
           <button class="btn btn-primary btn-sm" id="newTaskBtn" style="display:none;">+ New Assignment</button>
         </div>
       </div>
@@ -148,6 +151,46 @@
           <tbody id="employeeTableBody"></tbody>
         </table>
         <div id="employeeEmptyState" class="empty-state" style="display:none;">No team members yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="reportsView" style="display:none;">
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Reports</h2>
+        <div class="filters">
+          <select id="reportFilterStatus">
+            <option value="">All Statuses</option>
+          </select>
+          <select id="reportFilterPriority">
+            <option value="">All Priorities</option>
+          </select>
+          <label class="my-tasks-check" id="reportMyTasksWrap" style="display:none;">
+            <input type="checkbox" id="reportFilterMine"> My Tasks Only
+          </label>
+          <input type="text" id="reportFilterSearch" placeholder="Search...">
+          <button class="btn btn-primary btn-sm" id="reportExportBtn">Export Excel</button>
+        </div>
+      </div>
+      <div class="panel-body table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Division</th>
+              <th>Assignment</th>
+              <th>Owner</th>
+              <th>Status</th>
+              <th>Priority</th>
+              <th>Time</th>
+              <th>Start Date</th>
+              <th>Due Date</th>
+              <th>Progress</th>
+            </tr>
+          </thead>
+          <tbody id="reportTableBody"></tbody>
+        </table>
+        <div id="reportEmptyState" class="empty-state" style="display:none;">No assignments match these filters.</div>
       </div>
     </div>
   </div>
