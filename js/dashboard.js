@@ -76,7 +76,6 @@ async function boot() {
   document.getElementById('newTaskBtn').addEventListener('click', () => openTaskModal());
   document.getElementById('taskForm').addEventListener('submit', onSaveTask);
   document.getElementById('saveStatusBtn').addEventListener('click', onSaveStatus);
-  document.getElementById('addCommentBtn').addEventListener('click', onAddComment);
   document.getElementById('detailProgress').addEventListener('input', (e) => {
     document.getElementById('progressValue').textContent = `${e.target.value}%`;
   });
@@ -323,19 +322,18 @@ function renderTable() {
   tbody.innerHTML = tasks.map(t => {
     const overdue = isOverdue(t);
     // Intern/External can create tasks for themselves (t.assignedBy ===
-    // them); those get the same Edit/Delete as anyone with full access
-    // gets. Work assigned to them by someone else only ever gets "Update"
-    // (status/progress/comments via the detail modal).
+    // them); those get the same Edit as anyone with full access gets. Work
+    // assigned to them by someone else only ever gets "Update" (status/
+    // progress via the detail modal). Assignments are never deletable once
+    // created, by design — there's no Delete action anywhere in this table.
     const isOwnTask = !hasFullAccess(session.role) && t.assignedBy === session.id;
     let actions;
     if (hasFullAccess(session.role)) {
       actions = `<button class="icon-btn" onclick="openDetailModal(${t.id})">Update</button>
-         <button class="icon-btn" onclick="openTaskModal(${t.id})">Edit</button>
-         <button class="icon-btn" onclick="onDeleteTask(${t.id})">Delete</button>`;
+         <button class="icon-btn" onclick="openTaskModal(${t.id})">Edit</button>`;
     } else if (isOwnTask) {
       actions = `<button class="icon-btn" onclick="openDetailModal(${t.id})">Update</button>
-         <button class="icon-btn" onclick="openTaskModal(${t.id})">Edit</button>
-         <button class="icon-btn" onclick="onDeleteTask(${t.id})">Delete</button>`;
+         <button class="icon-btn" onclick="openTaskModal(${t.id})">Edit</button>`;
     } else {
       actions = `<button class="icon-btn" onclick="openDetailModal(${t.id})">Update</button>`;
     }
@@ -862,19 +860,6 @@ async function onSaveTask(e) {
   showToast(id ? 'Assignment updated.' : 'Assignment created.');
 }
 
-async function onDeleteTask(id) {
-  const task = allTasks.find(t => t.id === id);
-  if (!task) return;
-  if (!confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
-  const result = await deleteTask(id, session.id);
-  if (!result.ok) {
-    showToast(result.error || 'Could not delete the assignment.');
-    return;
-  }
-  await refreshAndRender();
-  showToast('Assignment deleted.');
-}
-
 /* ---------- Detail modal ---------- */
 
 async function openDetailModal(id) {
@@ -899,21 +884,7 @@ async function openDetailModal(id) {
   document.getElementById('detailProgress').value = task.progress;
   document.getElementById('progressValue').textContent = `${task.progress}%`;
 
-  renderComments(await getComments(id));
   openModal('detailModalBackdrop');
-}
-
-function renderComments(comments) {
-  const list = document.getElementById('commentList');
-  list.innerHTML = comments.length
-    ? comments.map(c => `
-        <div class="comment-item">
-          <span class="who">${escapeHtml(ownerName(c.user_id, allUsers))}</span>
-          <span class="when">${formatDateTime(c.created_at)}</span>
-          <div>${escapeHtml(c.text)}</div>
-        </div>
-      `).join('')
-    : '<div class="empty-state">No comments yet.</div>';
 }
 
 async function onSaveStatus() {
@@ -928,21 +899,6 @@ async function onSaveStatus() {
   }
   await refreshAndRender();
   showToast('Status updated.');
-}
-
-async function onAddComment() {
-  if (!activeTaskId) return;
-  const input = document.getElementById('commentInput');
-  const text = input.value.trim();
-  if (!text) return;
-  const result = await addComment(activeTaskId, session.id, text);
-  if (!result.ok) {
-    showToast(result.error || 'Could not add the comment.');
-    return;
-  }
-  input.value = '';
-  renderComments(await getComments(activeTaskId));
-  await refreshData();
 }
 
 /* ---------- Export ---------- */
