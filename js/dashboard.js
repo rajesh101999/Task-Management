@@ -85,6 +85,7 @@ async function boot() {
   document.getElementById('saveStatusBtn').addEventListener('click', onSaveStatus);
   document.getElementById('detailProgress').addEventListener('input', (e) => {
     document.getElementById('progressValue').textContent = `${e.target.value}%`;
+    e.target.style.setProperty('--pct', `${e.target.value}%`);
   });
 
   document.querySelectorAll('[data-close]').forEach(btn => {
@@ -948,7 +949,9 @@ async function openDetailModal(id) {
   ].map(([k, v]) => `<div class="detail-row"><span class="k">${k}</span><span class="v">${escapeHtml(String(v))}</span></div>`).join('');
 
   document.getElementById('detailStatus').value = task.status;
-  document.getElementById('detailProgress').value = task.progress;
+  const progressInput = document.getElementById('detailProgress');
+  progressInput.value = task.progress;
+  progressInput.style.setProperty('--pct', `${task.progress}%`);
   document.getElementById('progressValue').textContent = `${task.progress}%`;
 
   openModal('detailModalBackdrop');
