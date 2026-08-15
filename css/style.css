@@ -817,15 +817,21 @@ tbody tr:hover { background: #fafbff; }
   gap: 0 14px;
 }
 
-.detail-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 0;
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 13px;
-  border-bottom: 1px dashed var(--border);
 }
-.detail-row .k { color: var(--text-muted); }
-.detail-row .v { font-weight: 600; text-align: right; }
+.detail-table tr { border-bottom: 1px dashed var(--border); }
+.detail-table tr:last-child { border-bottom: none; }
+.detail-table th,
+.detail-table td {
+  padding: 6px 0;
+  text-align: left;
+  font-weight: 400;
+}
+.detail-table th { color: var(--text-muted); width: 40%; }
+.detail-table td { font-weight: 600; text-align: right; }
 
 .comment-list { margin: 12px 0; display: flex; flex-direction: column; gap: 10px; max-height: 180px; overflow-y: auto; }
 .comment-item { background: var(--bg); border-radius: 8px; padding: 8px 10px; font-size: 13px; }

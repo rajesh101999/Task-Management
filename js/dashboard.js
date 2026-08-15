@@ -937,7 +937,7 @@ async function openDetailModal(id) {
 
   document.getElementById('detailTitle').textContent = task.title;
   document.getElementById('detailDescription').textContent = task.description || 'No description provided.';
-  document.getElementById('detailMeta').innerHTML = [
+  const detailRows = [
     ['Division', task.division],
     ['Assigned By', ownerName(task.assignedBy, allUsers)],
     ['Assigned To', ownerName(task.assignedTo, allUsers)],
@@ -946,7 +946,8 @@ async function openDetailModal(id) {
     ['Due Date', formatDate(task.dueDate)],
     ['Estimated Time', task.estimatedTime || '—'],
     ['Remarks', task.remarks || '—'],
-  ].map(([k, v]) => `<div class="detail-row"><span class="k">${k}</span><span class="v">${escapeHtml(String(v))}</span></div>`).join('');
+  ].map(([k, v]) => `<tr><th>${k}</th><td>${escapeHtml(String(v))}</td></tr>`).join('');
+  document.getElementById('detailMeta').innerHTML = `<table class="detail-table"><tbody>${detailRows}</tbody></table>`;
 
   document.getElementById('detailStatus').value = task.status;
   const progressInput = document.getElementById('detailProgress');
