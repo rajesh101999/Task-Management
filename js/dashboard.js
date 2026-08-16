@@ -68,6 +68,15 @@ async function boot() {
     document.getElementById('teamForm').addEventListener('submit', onSaveTeam);
   }
 
+  // Team filter: only useful to someone who can see more than one team's
+  // worth of people at once — Admin (every team) or a Manager leading more
+  // than one team. Options are filled once allTeams/myTeamIds are loaded,
+  // below.
+  if (session.role === 'Admin' || session.role === 'Manager') {
+    document.getElementById('filterTeam').style.display = 'inline-block';
+    document.getElementById('reportFilterTeam').style.display = 'inline-block';
+  }
+
   fillOptions(document.getElementById('filterStatus'), STATUSES, true);
   fillOptions(document.getElementById('filterPriority'), PRIORITIES, true);
   fillOptions(document.getElementById('reportFilterStatus'), STATUSES, true);
@@ -78,10 +87,12 @@ async function boot() {
 
   document.getElementById('filterStatus').addEventListener('change', renderAll);
   document.getElementById('filterPriority').addEventListener('change', renderAll);
+  document.getElementById('filterTeam').addEventListener('change', renderAll);
   document.getElementById('filterMine').addEventListener('change', renderAll);
   document.getElementById('filterSearch').addEventListener('input', renderAll);
   document.getElementById('reportFilterStatus').addEventListener('change', renderReportTable);
   document.getElementById('reportFilterPriority').addEventListener('change', renderReportTable);
+  document.getElementById('reportFilterTeam').addEventListener('change', renderReportTable);
   document.getElementById('reportFilterMine').addEventListener('change', renderReportTable);
   document.getElementById('reportFilterSearch').addEventListener('input', renderReportTable);
   document.getElementById('reportExportBtn').addEventListener('click', onExport);
@@ -109,6 +120,7 @@ async function boot() {
 
   await refreshData();
   fillEmployeeOptions();
+  fillTeamFilterOptions();
   renderAll();
 }
 
@@ -350,6 +362,24 @@ function fillEmployeeOptions() {
   }
 }
 
+// Populates the Team filter on both the Assignments and Reports tabs —
+// Admin gets every team, a Manager gets just the team(s) they lead (see
+// boot(), which only shows the filter at all for those two roles). Keeps
+// whatever's currently selected if it's still a valid option, same as
+// refreshSupervisorOptions' preserveId behavior — so re-filling the list
+// after a team is added/edited/deleted doesn't reset an in-progress filter.
+function fillTeamFilterOptions() {
+  const teams = session.role === 'Admin' ? allTeams : allTeams.filter(t => myTeamIds.includes(t.id));
+  const optionsHtml = '<option value="">All Teams</option>' +
+    teams.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+  ['filterTeam', 'reportFilterTeam'].forEach(id => {
+    const select = document.getElementById(id);
+    const current = select.value;
+    select.innerHTML = optionsHtml;
+    if (teams.some(t => t.id === current)) select.value = current;
+  });
+}
+
 /* ---------- Fetch + cache ---------- */
 
 async function refreshData() {
@@ -372,10 +402,11 @@ function visibleTasks() {
   return allTasks;
 }
 
-function filterTasksList(status, priority, mineOnly, search) {
+function filterTasksList(status, priority, teamId, mineOnly, search) {
   return visibleTasks().filter(t => {
     if (status && t.status !== status) return false;
     if (priority && t.priority !== priority) return false;
+    if (teamId && ownerTeamId(t.assignedTo, allUsers) !== teamId) return false;
     if (mineOnly && t.assignedTo !== session.id) return false;
     if (search && !`${t.title} ${t.division} ${ownerName(t.assignedTo, allUsers)}`.toLowerCase().includes(search)) return false;
     return true;
@@ -385,9 +416,10 @@ function filterTasksList(status, priority, mineOnly, search) {
 function filteredTasks() {
   const status = document.getElementById('filterStatus').value;
   const priority = document.getElementById('filterPriority').value;
+  const teamId = document.getElementById('filterTeam').value;
   const search = document.getElementById('filterSearch').value.trim().toLowerCase();
   const mineOnly = hasFullAccess(session.role) && document.getElementById('filterMine').checked;
-  return filterTasksList(status, priority, mineOnly, search);
+  return filterTasksList(status, priority, teamId, mineOnly, search);
 }
 
 // Mirrors filteredTasks() but reads the Reports tab's own filter controls —
@@ -396,9 +428,10 @@ function filteredTasks() {
 function filteredReportTasks() {
   const status = document.getElementById('reportFilterStatus').value;
   const priority = document.getElementById('reportFilterPriority').value;
+  const teamId = document.getElementById('reportFilterTeam').value;
   const search = document.getElementById('reportFilterSearch').value.trim().toLowerCase();
   const mineOnly = hasFullAccess(session.role) && document.getElementById('reportFilterMine').checked;
-  return filterTasksList(status, priority, mineOnly, search);
+  return filterTasksList(status, priority, teamId, mineOnly, search);
 }
 
 /* ---------- Render ---------- */
@@ -969,6 +1002,7 @@ async function onSaveTeam(e) {
 
   closeModal('teamModalBackdrop');
   await refreshAndRender();
+  fillTeamFilterOptions();
   showToast(id ? 'Team updated.' : 'Team created.');
 }
 
@@ -985,6 +1019,7 @@ async function onDeleteTeam(id) {
     return;
   }
   await refreshAndRender();
+  fillTeamFilterOptions();
   showToast('Team deleted.');
 }
 

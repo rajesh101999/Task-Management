@@ -123,6 +123,15 @@ function ownerName(id, users) {
   return user ? user.name : '—';
 }
 
+// Looks up the team a profile belongs to (an Employee/Intern/External's own
+// team_id) — used to filter assignments by their owner's team. A Manager or
+// Admin has no team_id of their own (they lead teams rather than belong to
+// one), so this only ever resolves for the roles that actually carry one.
+function ownerTeamId(id, users) {
+  const user = (users || []).find(u => u.id === id);
+  return user ? user.teamId : null;
+}
+
 function exportTasksToExcel(tasks, filename, users) {
   const rows = tasks.map(t => ({
     Division: t.division,
