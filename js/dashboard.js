@@ -7,7 +7,7 @@ let session = null;
 let allUsers = [];
 let allTasks = [];
 let allTeams = [];
-let myTeamId = null; // the team this Manager leads, if any (Admin/Employee: unused)
+let myTeamIds = []; // every team this Manager leads, if any (Admin/Employee: unused)
 let activeTaskId = null;
 // undefined = no avatar change staged; '' = explicit "remove photo"; a data
 // URL = a new photo picked in the Settings modal, not yet saved.
@@ -354,8 +354,7 @@ function fillEmployeeOptions() {
 
 async function refreshData() {
   [allUsers, allTasks, allTeams] = await Promise.all([getUsers(), getTasks(), getTeams()]);
-  const led = allTeams.find(t => t.managerId === session.id);
-  myTeamId = led ? led.id : null;
+  myTeamIds = allTeams.filter(t => t.managerId === session.id).map(t => t.id);
 }
 
 async function refreshAndRender() {
@@ -418,20 +417,24 @@ function renderAll() {
   renderHeaderTeam();
 }
 
-// Small always-visible badge in the header showing which team the signed-in
-// person is scoped to: the team a Manager leads, or the team their own role
-// (Employee/Intern/External) belongs to. Admin isn't scoped to a single
-// team, so nothing shows for them.
+// Small always-visible badge in the header showing which team(s) the
+// signed-in person is scoped to: every team a Manager leads (there can be
+// more than one), or the single team their own role (Employee/Intern/
+// External) belongs to. Admin isn't scoped to a single team, so nothing
+// shows for them.
 function renderHeaderTeam() {
   const badge = document.getElementById('headerTeamBadge');
-  let name = null;
+  let names = [];
   if (session.role === 'Manager') {
-    name = myTeamId ? teamName(myTeamId) : null;
+    names = myTeamIds.map(teamName);
   } else if (TEAM_ROLES.includes(session.role)) {
-    name = session.teamId ? teamName(session.teamId) : null;
+    names = session.teamId ? [teamName(session.teamId)] : [];
   }
-  badge.textContent = name || '';
-  badge.style.display = name ? 'inline-block' : 'none';
+  // More than a couple of team names would overrun the header, so past that
+  // point show a count instead — the full list is still there on hover.
+  badge.textContent = names.length > 2 ? `${names.slice(0, 2).join(', ')} +${names.length - 2} more` : names.join(', ');
+  badge.title = names.join(', ');
+  badge.style.display = names.length ? 'inline-block' : 'none';
 }
 
 /* ---------- Tabs ---------- */
@@ -635,11 +638,11 @@ function renderEmployees() {
   }).join('');
 
   // A Manager with no team yet would have their new hire vanish from their
-  // own view (RLS scopes them to team_id = their team, and a brand new
-  // member can't join a team that doesn't exist) — block that instead of
-  // letting it happen silently.
+  // own view (RLS scopes them to team_id in one of their teams, and a brand
+  // new member can't join a team that doesn't exist) — block that instead
+  // of letting it happen silently.
   const addBtn = document.getElementById('newEmployeeBtn');
-  if (session.role === 'Manager' && !myTeamId) {
+  if (session.role === 'Manager' && !myTeamIds.length) {
     addBtn.disabled = true;
     addBtn.title = 'Ask an Admin to create your team first (Teams tab).';
   } else {
@@ -668,9 +671,12 @@ function openEmployeeModal(id) {
   });
   document.getElementById('e_selfRoleHint').style.display = 'none';
 
+  // Admin can place someone on any team; a Manager can only place them on
+  // one of the (possibly several) teams that Manager leads.
   const teamSelect = document.getElementById('e_team');
+  const teamOptions = session.role === 'Manager' ? allTeams.filter(t => myTeamIds.includes(t.id)) : allTeams;
   teamSelect.innerHTML = '<option value="">No team</option>' +
-    allTeams.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+    teamOptions.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
 
   if (id) {
     const member = allUsers.find(u => u.id === id);
@@ -712,7 +718,7 @@ function openEmployeeModal(id) {
     document.getElementById('e_password').placeholder = 'Set a login password';
     document.getElementById('employeeHint').textContent = "Share the email and password with them — they'll use them to sign in.";
     roleRadios.forEach(r => { r.checked = r.value === allowedRoles[0]; });
-    teamSelect.value = session.role === 'Manager' ? (myTeamId || '') : '';
+    teamSelect.value = session.role === 'Manager' ? (myTeamIds[0] || '') : '';
     refreshSupervisorOptions();
     updateEmployeeIdPlaceholder();
   }
@@ -727,17 +733,18 @@ function updateEmployeeIdPlaceholder() {
 }
 
 // Rebuilds the Supervisor dropdown to just the Employees on whichever team
-// is currently selected (Admin: the live value of the Team field; Manager/
-// Employee: their own team, since their Team field is pinned/hidden) — a
-// supervisor should always be a teammate of the person they supervise, not
-// someone from a different team. Called on modal open and whenever the Team
-// field changes. `preserveId`, if it's still in the rebuilt pool, stays
-// selected; otherwise the field resets to "Unassigned" (e.g. after picking
-// a different team, the old supervisor no longer belongs to it).
+// is currently selected (Admin/Manager: the live value of the Team field,
+// since a Manager may lead several and has to pick one; Employee: their own
+// team, since their Team field is pinned/hidden) — a supervisor should
+// always be a teammate of the person they supervise, not someone from a
+// different team. Called on modal open and whenever the Team field changes.
+// `preserveId`, if it's still in the rebuilt pool, stays selected; otherwise
+// the field resets to "Unassigned" (e.g. after picking a different team,
+// the old supervisor no longer belongs to it).
 function refreshSupervisorOptions(preserveId) {
-  const teamId = session.role === 'Admin'
+  const teamId = (session.role === 'Admin' || session.role === 'Manager')
     ? (document.getElementById('e_team').value || null)
-    : (session.role === 'Manager' ? myTeamId : session.teamId);
+    : session.teamId;
   const pool = allUsers.filter(u => u.role === 'Employee' && u.teamId === teamId);
 
   const supervisorSelect = document.getElementById('e_supervisor');
@@ -747,10 +754,12 @@ function refreshSupervisorOptions(preserveId) {
 }
 
 // The Team field only makes sense for roles that carry a team_id
-// (Employee/Intern/External), and only Admin gets to choose freely — a
-// Manager/Employee adding their own hire is silently pinned to their own
-// team (see onSaveEmployee), so the field would just be a confusing no-op
-// for them.
+// (Employee/Intern/External). Admin chooses freely among every team;
+// Manager chooses among just the team(s) they lead (openEmployeeModal
+// narrows the option list — a Manager leading only one team just sees a
+// single, effectively-fixed option). An Employee adding their own hire is
+// silently pinned to their own team (see onSaveEmployee), so the field
+// would just be a confusing no-op for them.
 //
 // The Supervisor field only makes sense for roles that carry a
 // supervisor_id (Intern/External), and only Admin/Manager choose it
@@ -759,7 +768,7 @@ function refreshSupervisorOptions(preserveId) {
 function updateHierarchyFieldsVisibility() {
   const role = document.querySelector('input[name="e_role"]:checked').value;
 
-  const showTeam = session.role === 'Admin' && TEAM_ROLES.includes(role);
+  const showTeam = (session.role === 'Admin' || session.role === 'Manager') && TEAM_ROLES.includes(role);
   document.getElementById('e_teamField').style.display = showTeam ? 'block' : 'none';
 
   const showSupervisor = (session.role === 'Admin' || session.role === 'Manager') && SUPERVISED_ROLES.includes(role);
@@ -779,14 +788,14 @@ async function onSaveEmployee(e) {
     role: document.querySelector('input[name="e_role"]:checked').value,
   };
 
-  // Only Employee/Intern/External carry a team_id (a Manager's "team" is
-  // the team that names them as manager, not something on their own
-  // profile). Admin picks freely from the dropdown; a Manager adding their
-  // own hire is silently pinned to the team they lead; an Employee adding
-  // their own hire inherits the team they're already a member of.
+  // Only Employee/Intern/External carry a team_id (a Manager's "team(s)" is
+  // whichever teams name them as manager, not something on their own
+  // profile). Admin/Manager both pick from the dropdown (Manager's is
+  // narrowed to just the team(s) they lead — see openEmployeeModal); an
+  // Employee adding their own hire inherits the team they're already a
+  // member of.
   if (TEAM_ROLES.includes(payload.role)) {
-    if (session.role === 'Admin') payload.teamId = document.getElementById('e_team').value || null;
-    else if (session.role === 'Manager') payload.teamId = myTeamId || null;
+    if (session.role === 'Admin' || session.role === 'Manager') payload.teamId = document.getElementById('e_team').value || null;
     else payload.teamId = session.teamId || null;
   } else if (!isSelf) {
     payload.teamId = null;
@@ -924,15 +933,10 @@ function openTeamModal(id) {
 
   const editingTeam = id ? allTeams.find(t => t.id === id) : null;
 
-  // A Manager can only lead one team, so offer each available Manager once —
-  // whoever already leads the team being edited stays in the list too.
+  // A Manager can lead any number of teams, so every Manager is always
+  // offered here — nothing to exclude based on teams they already lead.
   const managerSelect = document.getElementById('tm_manager');
-  const availableManagers = allUsers.filter(u =>
-    u.role === 'Manager' && (
-      !allTeams.some(t => t.managerId === u.id) ||
-      (editingTeam && editingTeam.managerId === u.id)
-    )
-  );
+  const availableManagers = allUsers.filter(u => u.role === 'Manager');
   managerSelect.innerHTML = '<option value="">Unassigned</option>' +
     availableManagers.map(m => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
 

@@ -55,12 +55,16 @@ Teams to scope Managers to their own people.
   credentials from client-side code).
 - **Admin view** — everything a Manager can do, plus the **Teams** tab:
   create a team, assign it a Manager, and that Manager is then scoped to
-  just that team everywhere in the app (People tab, workload, the
-  "Assigned Employee" picker, the assignments list). A Manager with no
+  that team everywhere in the app (People tab, workload, the "Assigned
+  Employee" picker, the assignments list). A Manager can lead more than one
+  team — just create/edit another team and assign it to the same Manager;
+  their access becomes the union of every team they lead. A Manager with no
   team yet only sees themselves until an Admin sets one up for them.
-- **Manager view** — create, edit, delete assignments for their own team;
+- **Manager view** — create, edit, delete assignments for their team(s);
   assign to any of their team's Employees/Interns/Externals; see their
-  team's assignments and workload.
+  team's assignments and workload. Adding/editing a member offers a Team
+  picker whenever the Manager leads more than one team, so they choose
+  which one a new hire lands on.
 - **Employee view** — same shape as a Manager's, one tier down: create,
   edit, delete assignments for their own Interns/Externals (whoever has
   this Employee set as their **Supervisor**); see just those people and
@@ -97,7 +101,9 @@ Teams to scope Managers to their own people.
   in Postgres, protected by Row Level Security, matching the org chart at
   the top of this file: Intern/External only ever see what's assigned to
   them, an Employee only their own Interns/Externals (via `supervisor_id`),
-  a Manager only their own team (via `team_id`), Admin sees everything.
+  a Manager only the team(s) they lead (via `team_id`, matched against
+  every team where `teams.manager_id` is them — one Manager can lead more
+  than one team), Admin sees everything.
 
 ## Backend (Supabase)
 
@@ -116,6 +122,10 @@ Teams to scope Managers to their own people.
   `2026-08-16_profile-avatar.sql` adds `profiles.avatar_url` (a resized data
   URL, not a Storage file — no bucket to configure) — run it before the
   header's **Settings** menu can save a profile photo.
+  `2026-08-16_manager-multi-team.sql` is the one that lets a Manager lead
+  more than one team — run it before assigning a second team to a Manager
+  who already leads one, otherwise the old single-team lookup used by RLS
+  throws instead of scoping correctly.
 - Adding a team member signs the new account up on a second, memory-only
   Supabase client so the signed-in Employee/Manager/Admin's own session is
   never disturbed — see `addTeamMember` in `js/auth.js`.

@@ -324,6 +324,10 @@ a:hover { text-decoration: underline; }
   font-weight: 600;
   font-size: 14px;
   letter-spacing: 0.02em;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-actions {
