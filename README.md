@@ -47,6 +47,12 @@ Teams to scope Managers to their own people.
   passwords, real sessions — not stored in the browser). No public
   sign-up page — `signup.html` is just a redirect stub kept around in
   case of old links/bookmarks.
+- **Settings** (header avatar menu, every role) — change your own profile
+  photo and/or password. The photo is resized/compressed to a small JPEG
+  client-side and saved as a data URL on `profiles.avatar_url`; the password
+  change reuses the same self-service path as editing your own row from the
+  People tab (Supabase Auth only ever allows an account to change its own
+  credentials from client-side code).
 - **Admin view** — everything a Manager can do, plus the **Teams** tab:
   create a team, assign it a Manager, and that Manager is then scoped to
   just that team everywhere in the app (People tab, workload, the
@@ -107,6 +113,9 @@ Teams to scope Managers to their own people.
   `profiles.supervisor_id` and the Employee-level RLS policies described
   above — run it before expecting Employee accounts to see the People/
   workload/assignment access this README describes.
+  `2026-08-16_profile-avatar.sql` adds `profiles.avatar_url` (a resized data
+  URL, not a Storage file — no bucket to configure) — run it before the
+  header's **Settings** menu can save a profile photo.
 - Adding a team member signs the new account up on a second, memory-only
   Supabase client so the signed-in Employee/Manager/Admin's own session is
   never disturbed — see `addTeamMember` in `js/auth.js`.

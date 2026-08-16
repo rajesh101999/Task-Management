@@ -29,18 +29,24 @@
 
     <div class="profile-menu">
       <button type="button" class="avatar-btn" id="profileBtn" aria-haspopup="true" aria-expanded="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <img id="profileAvatarImg" alt="" style="display:none;">
+        <svg id="profileAvatarIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       </button>
       <div class="profile-dropdown" id="profileDropdown">
         <div class="profile-dropdown-header">
           <div class="avatar-lg">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <img id="dropdownAvatarImg" alt="" style="display:none;">
+            <svg id="dropdownAvatarIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           </div>
           <div class="profile-id">
             <div class="profile-name" id="userName"></div>
             <div class="profile-email" id="userEmail"></div>
           </div>
         </div>
+        <button type="button" class="settings-btn" id="settingsBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings
+        </button>
         <button type="button" class="logout-btn" id="logoutBtn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           Logout
@@ -442,6 +448,47 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-close="resetPasswordModalBackdrop">Cancel</button>
         <button type="submit" class="btn btn-primary">Set Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- My Settings Modal (profile photo + own password) -->
+<div class="modal-backdrop" id="settingsModalBackdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Settings</h3>
+      <button class="modal-close" data-close="settingsModalBackdrop">&times;</button>
+    </div>
+    <form id="settingsForm">
+      <div class="modal-body">
+        <div class="settings-avatar-row">
+          <div class="avatar-xl" id="settingsAvatarPreview">
+            <img id="settingsAvatarImg" alt="" style="display:none;">
+            <svg id="settingsAvatarIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div class="settings-avatar-actions">
+            <button type="button" class="btn btn-secondary" id="changePhotoBtn">Change Photo</button>
+            <button type="button" class="link-btn" id="removePhotoBtn">Remove photo</button>
+            <input type="file" id="settingsAvatarInput" accept="image/*" style="display:none;">
+          </div>
+        </div>
+
+        <div class="field" style="margin-top:20px;">
+          <label for="settingsNewPassword">New Password</label>
+          <input type="text" id="settingsNewPassword" autocomplete="new-password" minlength="6" placeholder="Leave blank to keep unchanged">
+        </div>
+        <div class="field">
+          <label for="settingsConfirmPassword">Confirm New Password</label>
+          <input type="text" id="settingsConfirmPassword" autocomplete="new-password" minlength="6" placeholder="Re-enter the new password">
+        </div>
+        <p style="color: var(--text-muted); font-size: 12px;">
+          Leave the password fields blank to keep your current password.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close="settingsModalBackdrop">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
       </div>
     </form>
   </div>

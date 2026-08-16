@@ -12,6 +12,7 @@ function mapProfile(row) {
     division: row.division,
     teamId: row.team_id,
     supervisorId: row.supervisor_id,
+    avatarUrl: row.avatar_url,
   };
 }
 
@@ -45,6 +46,7 @@ async function getSession() {
     division: profile.division,
     teamId: profile.team_id,
     supervisorId: profile.supervisor_id,
+    avatarUrl: profile.avatar_url,
   };
 }
 
@@ -267,6 +269,7 @@ async function updateUser(id, changes, isSelf) {
   if (changes.role !== undefined) profileChanges.role = changes.role;
   if (changes.teamId !== undefined) profileChanges.team_id = changes.teamId || null;
   if (changes.supervisorId !== undefined) profileChanges.supervisor_id = changes.supervisorId || null;
+  if (changes.avatarUrl !== undefined) profileChanges.avatar_url = changes.avatarUrl || null;
 
   if (isSelf) {
     const authChanges = {};

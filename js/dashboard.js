@@ -9,6 +9,9 @@ let allTasks = [];
 let allTeams = [];
 let myTeamId = null; // the team this Manager leads, if any (Admin/Employee: unused)
 let activeTaskId = null;
+// undefined = no avatar change staged; '' = explicit "remove photo"; a data
+// URL = a new photo picked in the Settings modal, not yet saved.
+let pendingAvatarDataUrl;
 
 document.addEventListener('DOMContentLoaded', boot);
 
@@ -19,7 +22,9 @@ async function boot() {
   document.getElementById('userName').textContent = session.name;
   document.getElementById('userEmail').textContent = session.email;
   document.getElementById('logoutBtn').addEventListener('click', logout);
+  applyAvatar(session.avatarUrl);
   setupHeaderMenu();
+  setupSettingsModal();
 
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
@@ -128,12 +133,159 @@ function setupHeaderMenu() {
     }
   });
 
+  document.getElementById('settingsBtn').addEventListener('click', () => {
+    profileDropdown.classList.remove('open');
+    profileBtn.setAttribute('aria-expanded', 'false');
+    openSettingsModal();
+  });
+
   document.getElementById('fullscreenBtn').addEventListener('click', () => {
     if (document.fullscreenElement) {
       document.exitFullscreen();
     } else {
       document.documentElement.requestFullscreen().catch(() => {});
     }
+  });
+}
+
+// Reflects a profile picture (or its absence) everywhere the header shows
+// one: the small header avatar button and the large one in its dropdown.
+// Each spot is an <img> (shown when there's a url) layered over the generic
+// person <svg> (shown otherwise) — see dashboard.html.
+function applyAvatar(url) {
+  [['profileAvatarImg', 'profileAvatarIcon'], ['dropdownAvatarImg', 'dropdownAvatarIcon']]
+    .forEach(([imgId, iconId]) => setAvatarPreview(imgId, iconId, url));
+}
+
+function setAvatarPreview(imgId, iconId, url) {
+  const img = document.getElementById(imgId);
+  const icon = document.getElementById(iconId);
+  if (!img || !icon) return;
+  if (url) {
+    img.src = url;
+    img.style.display = 'block';
+    icon.style.display = 'none';
+  } else {
+    img.removeAttribute('src');
+    img.style.display = 'none';
+    icon.style.display = 'block';
+  }
+}
+
+// My Settings modal: change my own profile photo and/or password. Reuses
+// the same self-service password path the People-tab "Edit" modal already
+// has (updateUser(..., isSelf: true) -> sb.auth.updateUser) rather than the
+// admin-only reset-password Edge Function, which only ever targets other
+// people's accounts.
+function setupSettingsModal() {
+  document.getElementById('settingsForm').addEventListener('submit', onSaveSettings);
+
+  document.getElementById('changePhotoBtn').addEventListener('click', () => {
+    document.getElementById('settingsAvatarInput').click();
+  });
+
+  document.getElementById('settingsAvatarInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('Please choose an image file.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      showToast('That image is too large (max 8MB).');
+      e.target.value = '';
+      return;
+    }
+    try {
+      const dataUrl = await resizeImageToDataUrl(file);
+      pendingAvatarDataUrl = dataUrl;
+      setAvatarPreview('settingsAvatarImg', 'settingsAvatarIcon', dataUrl);
+    } catch (err) {
+      showToast(err.message || 'Could not process that image.');
+    }
+  });
+
+  document.getElementById('removePhotoBtn').addEventListener('click', () => {
+    pendingAvatarDataUrl = '';
+    document.getElementById('settingsAvatarInput').value = '';
+    setAvatarPreview('settingsAvatarImg', 'settingsAvatarIcon', '');
+  });
+}
+
+function openSettingsModal() {
+  pendingAvatarDataUrl = undefined;
+  document.getElementById('settingsAvatarInput').value = '';
+  document.getElementById('settingsNewPassword').value = '';
+  document.getElementById('settingsConfirmPassword').value = '';
+  setAvatarPreview('settingsAvatarImg', 'settingsAvatarIcon', session.avatarUrl);
+  openModal('settingsModalBackdrop');
+}
+
+async function onSaveSettings(e) {
+  e.preventDefault();
+  const changes = {};
+  if (pendingAvatarDataUrl !== undefined) changes.avatarUrl = pendingAvatarDataUrl;
+
+  const newPw = document.getElementById('settingsNewPassword').value;
+  const confirmPw = document.getElementById('settingsConfirmPassword').value;
+  if (newPw || confirmPw) {
+    if (newPw.length < 6) {
+      showToast('New password must be at least 6 characters.');
+      return;
+    }
+    if (newPw !== confirmPw) {
+      showToast('Passwords do not match.');
+      return;
+    }
+    changes.password = newPw;
+  }
+
+  if (!Object.keys(changes).length) {
+    showToast('Nothing to update.');
+    return;
+  }
+
+  const result = await updateUser(session.id, changes, true);
+  if (!result.ok) {
+    showToast(result.error || 'Could not update settings.');
+    return;
+  }
+
+  session.avatarUrl = result.user.avatarUrl;
+  applyAvatar(session.avatarUrl);
+  pendingAvatarDataUrl = undefined;
+  closeModal('settingsModalBackdrop');
+  showToast('Settings updated.');
+}
+
+// Downscales/compresses an image file client-side before it's stored as a
+// data URL on profiles.avatar_url (see supabase/migrations/2026-08-16_
+// profile-avatar.sql) — keeps rows small without needing a Storage bucket.
+function resizeImageToDataUrl(file, maxSize = 256, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read that file.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('That file is not a readable image.'));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height) {
+          if (width > maxSize) { height = Math.round(height * (maxSize / width)); width = maxSize; }
+        } else if (height > maxSize) {
+          width = Math.round(width * (maxSize / height));
+          height = maxSize;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
   });
 }
 
