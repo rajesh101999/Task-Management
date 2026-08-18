@@ -1247,11 +1247,11 @@ function onExport() {
 // should mean the same thing regardless of what someone was last filtering.
 function onExportToday() {
   const todays = visibleTasks().filter(isUpdatedToday);
-  if (!todays.length) {
-    showToast('No assignments were updated today.');
-    return;
-  }
+  // Always download, same as Export Excel does — an empty sheet if nothing
+  // was touched today rather than silently doing nothing on click. The
+  // toast just explains why the file came back empty.
   exportTasksToExcel(todays, `today-report-${localDateStamp()}.xlsx`, allUsers);
+  if (!todays.length) showToast("Downloaded — no assignments were updated today.");
 }
 
 function localDateStamp(d) {
