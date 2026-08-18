@@ -97,6 +97,7 @@ async function boot() {
   document.getElementById('reportFilterMine').addEventListener('change', renderReportTable);
   document.getElementById('reportFilterSearch').addEventListener('input', renderReportTable);
   document.getElementById('reportExportBtn').addEventListener('click', onExport);
+  document.getElementById('reportExportTodayBtn').addEventListener('click', onExportToday);
   document.getElementById('newTaskBtn').addEventListener('click', () => openTaskModal());
   document.getElementById('taskForm').addEventListener('submit', onSaveTask);
   document.getElementById('saveStatusBtn').addEventListener('click', onSaveStatus);
@@ -1235,6 +1236,28 @@ async function onSaveStatus() {
 
 function onExport() {
   exportTasksToExcel(filteredReportTasks(), 'assignments.xlsx', allUsers);
+}
+
+// A fixed, one-click report — everything updated today (created, edited,
+// status/progress changed, reassigned), scoped the same way the rest of the
+// app already scopes tasks (RLS: Admin sees everyone's, a Manager their
+// team(s)', a Manager/Employee/Intern/External's own where relevant), but
+// deliberately ignoring whatever the Reports tab's own Status/Priority/
+// Team/Mine/Search filters happen to be set to right now — "today's report"
+// should mean the same thing regardless of what someone was last filtering.
+function onExportToday() {
+  const todays = visibleTasks().filter(isUpdatedToday);
+  if (!todays.length) {
+    showToast('No assignments were updated today.');
+    return;
+  }
+  exportTasksToExcel(todays, `today-report-${localDateStamp()}.xlsx`, allUsers);
+}
+
+function localDateStamp(d) {
+  d = d || new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 /* ---------- Modal helpers ---------- */

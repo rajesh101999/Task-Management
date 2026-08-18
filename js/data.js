@@ -23,6 +23,7 @@ function mapTask(row) {
     progress: row.progress,
     remarks: row.remarks,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -115,6 +116,20 @@ function isOverdue(task) {
   return due < today;
 }
 
+// True for anything touched today — created, edited, status/progress
+// changed, reassigned — updated_at is bumped by a DB trigger on every
+// UPDATE (see supabase/migrations/2026-08-18_assignment-updated-at.sql), so
+// this doesn't care which field actually changed. Compares calendar day in
+// the browser's local timezone, same as isOverdue above.
+function isUpdatedToday(task) {
+  if (!task.updatedAt) return false;
+  const updated = new Date(task.updatedAt);
+  const today = new Date();
+  return updated.getFullYear() === today.getFullYear()
+    && updated.getMonth() === today.getMonth()
+    && updated.getDate() === today.getDate();
+}
+
 // Looks up a display name from a profile id. Pure/sync: callers supply the
 // current user list (a fresh fetch, or a cache) — see ownerName usage in
 // dashboard.js, which keeps one around for the whole render pass.
@@ -143,6 +158,10 @@ function exportTasksToExcel(tasks, filename, users) {
     'Start Date': t.startDate,
     'Due Date': t.dueDate,
     Progress: `${t.progress}%`,
+    // formatDateTime is defined in js/dashboard.js, loaded after this file —
+    // fine, since this only ever runs later from a button click, by which
+    // point both scripts have finished loading.
+    'Last Updated': formatDateTime(t.updatedAt),
   }));
   const sheet = XLSX.utils.json_to_sheet(rows);
   const workbook = XLSX.utils.book_new();
