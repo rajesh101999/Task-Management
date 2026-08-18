@@ -1,6 +1,7 @@
 :root {
   --bg: #f4f6fb;
   --surface: #ffffff;
+  --surface-2: #fafbfd;
   --border: #e2e6ef;
   --text: #1b2130;
   --text-muted: #667085;
@@ -10,8 +11,57 @@
   --success: #16a34a;
   --warning: #d97706;
   --danger: #dc2626;
+  --danger-light: #fef2f2;
+  --danger-border: #fecaca;
   --radius: 10px;
   --shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.06);
+  color-scheme: light;
+}
+
+/* Dark theme — two ways in: "System" (no data-theme attribute, OS reports
+   dark) or an explicit choice saved from the header's theme menu. Both land
+   on the same token set; :not([data-theme="light"]) is what lets an
+   explicit Light choice override a dark OS preference, and the plain
+   [data-theme="dark"] rule after it is what lets an explicit Dark choice
+   apply regardless of the OS preference. See js/dashboard.js applyTheme(). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d111c;
+    --surface: #171b28;
+    --surface-2: #1d2231;
+    --border: #2b3244;
+    --text: #e7e9f2;
+    --text-muted: #98a1b8;
+    --primary: #6366f1;
+    --primary-dark: #818cf8;
+    --primary-light: rgba(99, 102, 241, 0.18);
+    --success: #34d399;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --danger-light: rgba(248, 113, 113, 0.14);
+    --danger-border: rgba(248, 113, 113, 0.35);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0d111c;
+  --surface: #171b28;
+  --surface-2: #1d2231;
+  --border: #2b3244;
+  --text: #e7e9f2;
+  --text-muted: #98a1b8;
+  --primary: #6366f1;
+  --primary-dark: #818cf8;
+  --primary-light: rgba(99, 102, 241, 0.18);
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --danger-light: rgba(248, 113, 113, 0.14);
+  --danger-border: rgba(248, 113, 113, 0.35);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -85,7 +135,7 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 14px;
-  background: #fff;
+  background: var(--surface);
   color: var(--text);
   font-family: inherit;
 }
@@ -240,17 +290,17 @@ a:hover { text-decoration: underline; }
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-primary:hover { background: var(--primary-dark); }
 .btn-block { width: 100%; }
-.btn-secondary { background: #fff; border-color: var(--border); color: var(--text); }
+.btn-secondary { background: var(--surface); border-color: var(--border); color: var(--text); }
 .btn-secondary:hover { background: var(--bg); }
-.btn-danger { background: #fff; border-color: var(--danger); color: var(--danger); }
-.btn-danger:hover { background: #fef2f2; }
+.btn-danger { background: var(--surface); border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover { background: var(--danger-light); }
 .btn-sm { padding: 6px 10px; font-size: 12px; }
 .btn-lg { padding: 14px 24px; font-size: 16px; margin-top: 4px; }
 
 .error-msg {
-  background: #fef2f2;
+  background: var(--danger-light);
   color: var(--danger);
-  border: 1px solid #fecaca;
+  border: 1px solid var(--danger-border);
   padding: 10px 12px;
   border-radius: 8px;
   font-size: 13px;
@@ -355,6 +405,48 @@ a:hover { text-decoration: underline; }
 .icon-btn-header svg { width: 18px; height: 18px; }
 
 .profile-menu { position: relative; }
+
+.theme-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 170px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.18);
+  padding: 6px;
+  z-index: 20;
+}
+
+.theme-dropdown.open { display: block; }
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.theme-option svg:first-child { flex-shrink: 0; width: 16px; height: 16px; }
+.theme-option span { flex: 1; }
+.theme-option .theme-check { flex-shrink: 0; width: 14px; height: 14px; display: none; }
+
+.theme-option:hover { background: var(--bg); color: var(--text); }
+
+.theme-option.active { background: var(--primary-light); color: var(--primary); }
+.theme-option.active .theme-check { display: block; }
 
 .avatar-btn {
   display: flex;
@@ -731,10 +823,10 @@ th {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  background: #fafbfd;
+  background: var(--surface-2);
 }
 
-tbody tr:hover { background: #fafbff; }
+tbody tr:hover { background: var(--surface-2); }
 
 .table-scroll { overflow-x: auto; }
 
@@ -790,7 +882,7 @@ tbody tr:hover { background: #fafbff; }
 
 .icon-btn {
   border: 1px solid var(--border);
-  background: #fff;
+  background: var(--surface);
   border-radius: 6px;
   padding: 5px 8px;
   font-size: 12px;
@@ -899,7 +991,11 @@ tbody tr:hover { background: #fafbff; }
   position: fixed;
   bottom: 20px;
   right: 20px;
-  background: var(--text);
+  /* Deliberately not var(--text)/var(--surface) — this stays a fixed dark
+     chip with light text in both themes rather than flipping with the
+     page, so it doesn't go "light-on-light" the moment dark mode makes
+     --text a light color. */
+  background: #1f2430;
   color: #fff;
   padding: 10px 16px;
   border-radius: 8px;

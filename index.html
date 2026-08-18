@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sign In · Task Manager</title>
+<!-- Same early theme-apply as dashboard.html — keeps the sign-in page in
+     whatever Light/Dark/System choice was last made from the dashboard. -->
+<script>
+  (function () {
+    var t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>

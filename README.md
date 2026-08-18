@@ -53,6 +53,13 @@ Teams to scope Managers to their own people.
   change reuses the same self-service path as editing your own row from the
   People tab (Supabase Auth only ever allows an account to change its own
   credentials from client-side code).
+- **Theme** (header moon/sun icon, every role, `index.html` too) — Light,
+  Dark, or System, saved to `localStorage` (no account/database involved) so
+  it's per-browser, not per-person. System just follows the OS's light/dark
+  setting live via `prefers-color-scheme` — there's nothing to store for it.
+  An inline snippet at the top of each page's `<head>` applies a saved
+  Light/Dark choice before the stylesheet loads, so there's no flash of the
+  wrong theme on load.
 - **Admin view** — everything a Manager can do, plus the **Teams** tab:
   create a team, assign it a Manager, and that Manager is then scoped to
   that team everywhere in the app (People tab, workload, the "Assigned

@@ -24,6 +24,7 @@ async function boot() {
   document.getElementById('logoutBtn').addEventListener('click', logout);
   applyAvatar(session.avatarUrl);
   setupHeaderMenu();
+  setupThemeMenu();
   setupSettingsModal();
 
   document.querySelectorAll('.nav-item').forEach(btn => {
@@ -125,9 +126,9 @@ async function boot() {
 }
 
 // Avatar opens/closes the profile dropdown (name, email, logout); the
-// fullscreen icon is the one header action that's actually wired up.
-// Dark mode / notifications are visual placeholders for now — no theme
-// system or notification feed exists yet.
+// fullscreen icon is wired up too. The theme switcher has its own menu —
+// see setupThemeMenu(). Notifications is still just a visual placeholder —
+// no notification feed exists yet.
 function setupHeaderMenu() {
   const profileBtn = document.getElementById('profileBtn');
   const profileDropdown = document.getElementById('profileDropdown');
@@ -158,6 +159,73 @@ function setupHeaderMenu() {
       document.documentElement.requestFullscreen().catch(() => {});
     }
   });
+}
+
+// Light / Dark / System theme switcher. "System" is stored as the absence
+// of a saved choice (and no data-theme attribute) rather than a literal
+// value — css/style.css's prefers-color-scheme media query is what actually
+// renders it, so there's nothing for this to apply beyond clearing any
+// earlier explicit choice. The <head> of every page applies a saved
+// Light/Dark choice inline, before the stylesheet loads, so there's no
+// flash of the wrong theme on load — this only needs to handle changes made
+// while the page is already open.
+const THEME_STORAGE_KEY = 'theme';
+
+function getStoredTheme() {
+  const t = localStorage.getItem(THEME_STORAGE_KEY);
+  return (t === 'light' || t === 'dark') ? t : 'system';
+}
+
+function applyTheme(choice) {
+  if (choice === 'light' || choice === 'dark') {
+    document.documentElement.setAttribute('data-theme', choice);
+    localStorage.setItem(THEME_STORAGE_KEY, choice);
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.removeItem(THEME_STORAGE_KEY);
+  }
+  updateThemeUI();
+}
+
+// Syncs the header's theme icon (shows whichever of the three was picked,
+// not the resolved light/dark appearance — same idea as GitHub's own
+// theme switcher) and the checkmark in the dropdown.
+function updateThemeUI() {
+  const choice = getStoredTheme();
+  document.getElementById('themeIconLight').style.display = choice === 'light' ? 'block' : 'none';
+  document.getElementById('themeIconDark').style.display = choice === 'dark' ? 'block' : 'none';
+  document.getElementById('themeIconSystem').style.display = choice === 'system' ? 'block' : 'none';
+  document.querySelectorAll('.theme-option').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.themeChoice === choice);
+  });
+}
+
+function setupThemeMenu() {
+  const themeBtn = document.getElementById('themeBtn');
+  const themeDropdown = document.getElementById('themeDropdown');
+
+  themeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = themeDropdown.classList.toggle('open');
+    themeBtn.setAttribute('aria-expanded', String(isOpen));
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!themeDropdown.contains(e.target) && e.target !== themeBtn) {
+      themeDropdown.classList.remove('open');
+      themeBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  document.querySelectorAll('.theme-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      applyTheme(btn.dataset.themeChoice);
+      themeDropdown.classList.remove('open');
+      themeBtn.setAttribute('aria-expanded', 'false');
+    });
+  });
+
+  updateThemeUI();
 }
 
 // Reflects a profile picture (or its absence) everywhere the header shows
