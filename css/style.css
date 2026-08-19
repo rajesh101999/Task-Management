@@ -672,7 +672,11 @@ a:hover { text-decoration: underline; }
 /* ---------- KPIs ---------- */
 .dashboard-top {
   display: flex;
-  align-items: stretch;
+  /* flex-start, not stretch — Team Workload has its own capped height
+     below and scrolls its own list, so the KPI cards next to it should
+     stay their natural compact size instead of being stretched to match
+     however tall the team roster happens to be. */
+  align-items: flex-start;
   gap: 14px;
   margin-bottom: 24px;
 }
@@ -688,9 +692,19 @@ a:hover { text-decoration: underline; }
   flex: 0 0 280px;
   display: flex;
   flex-direction: column;
+  /* Capped so a long team roster scrolls inside the card instead of
+     growing it (and, via .dashboard-top, the KPI cards next to it)
+     taller with every member added. */
+  max-height: 300px;
 }
 
 #workloadPanel .panel-body {
+  /* flex: 1 + min-height: 0 is what lets this actually shrink to fit
+     #workloadPanel's max-height above and scroll — a flex child's default
+     min-height is auto (its content size), which would ignore the cap and
+     overflow-y would never engage. */
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
