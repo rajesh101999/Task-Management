@@ -672,11 +672,12 @@ a:hover { text-decoration: underline; }
 /* ---------- KPIs ---------- */
 .dashboard-top {
   display: flex;
-  /* flex-start, not stretch — Team Workload has its own capped height
-     below and scrolls its own list, so the KPI cards next to it should
-     stay their natural compact size instead of being stretched to match
-     however tall the team roster happens to be. */
-  align-items: flex-start;
+  /* Stretch is safe again now that Team Workload has a fixed max-height
+     below (it scrolls its own list past that, rather than growing) — so
+     this just fills the KPI cards up to that same fixed height instead of
+     leaving a gap under them, without the old bug where a long team roster
+     used to inflate everything else in the row along with it. */
+  align-items: stretch;
   gap: 14px;
   margin-bottom: 24px;
 }
