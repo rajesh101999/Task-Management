@@ -200,6 +200,10 @@
       <div class="panel-header">
         <h2>Reports</h2>
         <div class="filters">
+          <label class="my-tasks-check" id="reportMyTasksWrap" style="display:none;">
+            <input type="checkbox" id="reportFilterMine"> My Tasks Only
+          </label>
+          <input type="text" id="reportFilterSearch" placeholder="Search...">
           <select id="reportFilterStatus">
             <option value="">All Statuses</option>
           </select>
@@ -209,11 +213,12 @@
           <select id="reportFilterTeam" style="display:none;">
             <option value="">All Teams</option>
           </select>
-          <label class="my-tasks-check" id="reportMyTasksWrap" style="display:none;">
-            <input type="checkbox" id="reportFilterMine"> My Tasks Only
+          <label class="date-range-field" title="Only assignments last updated on or after this date">
+            From <input type="date" id="reportFilterFromDate">
           </label>
-          <input type="text" id="reportFilterSearch" placeholder="Search...">
-          <button class="btn btn-secondary btn-sm" id="reportExportTodayBtn">Download Today's Report</button>
+          <label class="date-range-field" title="Only assignments last updated on or before this date">
+            To <input type="date" id="reportFilterToDate">
+          </label>
           <button class="btn btn-primary btn-sm" id="reportExportBtn">Export Excel</button>
         </div>
       </div>

@@ -96,8 +96,9 @@ async function boot() {
   document.getElementById('reportFilterTeam').addEventListener('change', renderReportTable);
   document.getElementById('reportFilterMine').addEventListener('change', renderReportTable);
   document.getElementById('reportFilterSearch').addEventListener('input', renderReportTable);
+  document.getElementById('reportFilterFromDate').addEventListener('change', renderReportTable);
+  document.getElementById('reportFilterToDate').addEventListener('change', renderReportTable);
   document.getElementById('reportExportBtn').addEventListener('click', onExport);
-  document.getElementById('reportExportTodayBtn').addEventListener('click', onExportToday);
   document.getElementById('newTaskBtn').addEventListener('click', () => openTaskModal());
   document.getElementById('taskForm').addEventListener('submit', onSaveTask);
   document.getElementById('saveStatusBtn').addEventListener('click', onSaveStatus);
@@ -471,13 +472,18 @@ function visibleTasks() {
   return allTasks;
 }
 
-function filterTasksList(status, priority, teamId, mineOnly, search) {
+// fromDate/toDate are optional — only the Reports tab has those controls
+// (see filteredReportTasks), the Assignments tab just never passes them, so
+// isUpdatedInRange's own no-bound check ('' / undefined on both sides)
+// makes them a no-op there.
+function filterTasksList(status, priority, teamId, mineOnly, search, fromDate, toDate) {
   return visibleTasks().filter(t => {
     if (status && t.status !== status) return false;
     if (priority && t.priority !== priority) return false;
     if (teamId && ownerTeamId(t.assignedTo, allUsers) !== teamId) return false;
     if (mineOnly && t.assignedTo !== session.id) return false;
     if (search && !`${t.title} ${t.division} ${ownerName(t.assignedTo, allUsers)}`.toLowerCase().includes(search)) return false;
+    if (!isUpdatedInRange(t, fromDate, toDate)) return false;
     return true;
   });
 }
@@ -494,13 +500,19 @@ function filteredTasks() {
 // Mirrors filteredTasks() but reads the Reports tab's own filter controls —
 // Reports has no live table, so its filters are independent of the
 // Assignments tab's (changing one shouldn't silently change the other).
+// The From/To date pair is Reports-only — it's what replaced the old fixed
+// "Download Today's Report" button: leave both blank for everything (same
+// as every other filter here), or set From = To for what used to be
+// "today", or any wider range for a custom-dated report.
 function filteredReportTasks() {
   const status = document.getElementById('reportFilterStatus').value;
   const priority = document.getElementById('reportFilterPriority').value;
   const teamId = document.getElementById('reportFilterTeam').value;
   const search = document.getElementById('reportFilterSearch').value.trim().toLowerCase();
   const mineOnly = hasFullAccess(session.role) && document.getElementById('reportFilterMine').checked;
-  return filterTasksList(status, priority, teamId, mineOnly, search);
+  const fromDate = document.getElementById('reportFilterFromDate').value;
+  const toDate = document.getElementById('reportFilterToDate').value;
+  return filterTasksList(status, priority, teamId, mineOnly, search, fromDate, toDate);
 }
 
 /* ---------- Render ---------- */
@@ -1234,30 +1246,23 @@ async function onSaveStatus() {
 
 /* ---------- Export ---------- */
 
+// Downloads whatever the Reports tab is currently showing — every filter
+// there (Status/Priority/Team/Mine/Search, plus the Updated From/To date
+// range) applies. The old dedicated "Download Today's Report" button was
+// just this same export with the date range pinned to a single day, so
+// From = To now covers that case; leaving both blank exports everything, as
+// before this feature existed at all. Always downloads a file, even an
+// empty sheet when the filters match nothing, same as it always has — a
+// click should never silently do nothing.
 function onExport() {
-  exportTasksToExcel(filteredReportTasks(), 'assignments.xlsx', allUsers);
-}
-
-// A fixed, one-click report — everything updated today (created, edited,
-// status/progress changed, reassigned), scoped the same way the rest of the
-// app already scopes tasks (RLS: Admin sees everyone's, a Manager their
-// team(s)', a Manager/Employee/Intern/External's own where relevant), but
-// deliberately ignoring whatever the Reports tab's own Status/Priority/
-// Team/Mine/Search filters happen to be set to right now — "today's report"
-// should mean the same thing regardless of what someone was last filtering.
-function onExportToday() {
-  const todays = visibleTasks().filter(isUpdatedToday);
-  // Always download, same as Export Excel does — an empty sheet if nothing
-  // was touched today rather than silently doing nothing on click. The
-  // toast just explains why the file came back empty.
-  exportTasksToExcel(todays, `today-report-${localDateStamp()}.xlsx`, allUsers);
-  if (!todays.length) showToast("Downloaded — no assignments were updated today.");
-}
-
-function localDateStamp(d) {
-  d = d || new Date();
-  const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const from = document.getElementById('reportFilterFromDate').value;
+  const to = document.getElementById('reportFilterToDate').value;
+  if (from && to && from > to) {
+    showToast('"Updated From" date is after "Updated To" — fix the range and try again.');
+    return;
+  }
+  const filename = (from || to) ? `assignments-updated-${from || 'start'}_to_${to || 'now'}.xlsx` : 'assignments.xlsx';
+  exportTasksToExcel(filteredReportTasks(), filename, allUsers);
 }
 
 /* ---------- Modal helpers ---------- */

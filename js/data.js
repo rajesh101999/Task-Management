@@ -116,18 +116,32 @@ function isOverdue(task) {
   return due < today;
 }
 
-// True for anything touched today — created, edited, status/progress
-// changed, reassigned — updated_at is bumped by a DB trigger on every
-// UPDATE (see supabase/migrations/2026-08-18_assignment-updated-at.sql), so
-// this doesn't care which field actually changed. Compares calendar day in
-// the browser's local timezone, same as isOverdue above.
-function isUpdatedToday(task) {
+// True when a task was last touched — created, edited, status/progress
+// changed, reassigned — on or between fromDate/toDate (each a "YYYY-MM-DD"
+// string straight from a <input type="date">, or '' for no bound on that
+// side). updated_at is bumped by a DB trigger on every UPDATE (see
+// supabase/migrations/2026-08-18_assignment-updated-at.sql), so this
+// doesn't care which field actually changed. Compares calendar day in the
+// browser's local timezone, inclusive of both ends — same-day range (from
+// === to) is what a single "today" filter looks like here.
+function isUpdatedInRange(task, fromDate, toDate) {
+  if (!fromDate && !toDate) return true;
   if (!task.updatedAt) return false;
   const updated = new Date(task.updatedAt);
-  const today = new Date();
-  return updated.getFullYear() === today.getFullYear()
-    && updated.getMonth() === today.getMonth()
-    && updated.getDate() === today.getDate();
+  updated.setHours(0, 0, 0, 0);
+  // fromDate/toDate are "YYYY-MM-DD" strings straight from <input
+  // type="date">; parsed as local midnight here (not new Date(str), which
+  // reads that shape as UTC midnight and would drift by the browser's UTC
+  // offset) so they compare correctly against `updated`, also local
+  // midnight above.
+  if (fromDate && updated < parseLocalDate(fromDate)) return false;
+  if (toDate && updated > parseLocalDate(toDate)) return false;
+  return true;
+}
+
+function parseLocalDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
 }
 
 // Looks up a display name from a profile id. Pure/sync: callers supply the

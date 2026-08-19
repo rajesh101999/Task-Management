@@ -103,13 +103,15 @@ Teams to scope Managers to their own people.
 - **Dashboard KPIs** — Total, Pending, In Progress, Completed, Overdue.
 - **Status workflow** — Pending → Accepted → In Progress → Under Review →
   Completed, plus On Hold / Blocked / Cancelled.
-- **Reports tab** — a live, filterable (Status/Priority/Team/Mine/Search)
-  preview with two export buttons: **Export Excel** for whatever's currently
-  filtered, and **Download Today's Report** for a fixed, filter-independent
-  spreadsheet of everything updated today — created, edited, status/progress
-  changed, reassigned, anything that touches the row — regardless of what
-  the on-screen filters happen to be set to. Both are `.xlsx` via SheetJS
-  (`js/data.js` exportTasksToExcel), not CSV.
+- **Reports tab** — a live, filterable preview (My Tasks Only and Search
+  first, then Status/Priority/Team, then an Updated From/To date range) with
+  one **Export Excel** button that downloads exactly what's currently
+  filtered, as `.xlsx` via SheetJS (`js/data.js` exportTasksToExcel), not
+  CSV. The From/To pair filters by last-updated date — created, edited,
+  status/progress changed, reassigned, anything that touches the row bumps
+  it (`assignments.updated_at`, kept current by a DB trigger — see
+  Backend below) — leave both blank for everything, or set From = To for
+  a single day's report.
 - All data (users + teams + assignments + activity log + comments) lives
   in Postgres, protected by Row Level Security, matching the org chart at
   the top of this file: Intern/External only ever see what's assigned to
@@ -140,9 +142,9 @@ Teams to scope Managers to their own people.
   who already leads one, otherwise the old single-team lookup used by RLS
   throws instead of scoping correctly.
   `2026-08-18_assignment-updated-at.sql` adds `assignments.updated_at`, kept
-  current by a DB trigger on every update — run it before using **Download
-  Today's Report**, otherwise every row has a null updated_at and the report
-  is always empty.
+  current by a DB trigger on every update — run it before using the Reports
+  tab's Updated From/To date filter, otherwise every row has a null
+  updated_at and any date-filtered export comes back empty.
 - Adding a team member signs the new account up on a second, memory-only
   Supabase client so the signed-in Employee/Manager/Admin's own session is
   never disturbed — see `addTeamMember` in `js/auth.js`.
