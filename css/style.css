@@ -692,10 +692,12 @@ a:hover { text-decoration: underline; }
   flex: 0 0 280px;
   display: flex;
   flex-direction: column;
-  /* Capped so a long team roster scrolls inside the card instead of
-     growing it (and, via .dashboard-top, the KPI cards next to it)
-     taller with every member added. */
-  max-height: 300px;
+  /* Capped close to the KPI cards' own natural height (now that
+     .dashboard-top no longer stretches them to match this panel) so the
+     row reads as one balanced height instead of a short row of cards next
+     to a much taller card — a long team roster scrolls inside instead of
+     growing this past that cap. */
+  max-height: 200px;
 }
 
 #workloadPanel .panel-body {
