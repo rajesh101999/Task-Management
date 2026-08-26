@@ -102,6 +102,7 @@ async function boot() {
   document.getElementById('newTaskBtn').addEventListener('click', () => openTaskModal());
   document.getElementById('taskForm').addEventListener('submit', onSaveTask);
   document.getElementById('saveStatusBtn').addEventListener('click', onSaveStatus);
+  document.getElementById('approveBtn').addEventListener('click', () => approveCompletion(activeTaskId));
   document.getElementById('detailProgress').addEventListener('input', (e) => {
     document.getElementById('progressValue').textContent = `${e.target.value}%`;
     e.target.style.setProperty('--pct', `${e.target.value}%`);
@@ -381,6 +382,20 @@ function fillOptions(select, values, includeAll) {
   });
 }
 
+// An Intern/External can still pick "Completed" for their own assignment —
+// it's just not what actually lands in the database. onSaveTask/onSaveStatus
+// redirect that choice to "Pending Approval" instead (see requestsApproval
+// below), and the DB trigger in 2026-08-24_completion-approval.sql backs
+// that up server-side. True only when it's *their own* assignment
+// (assignedTo === them) and it isn't already Completed — the latter check
+// matters because without it, simply reopening an already-approved task and
+// hitting Update/Save with no changes would demote it straight back to
+// Pending Approval.
+function requestsApproval(status, assignedTo, currentStatus) {
+  return status === 'Completed' && currentStatus !== 'Completed'
+    && isStaffRole(session.role) && assignedTo === session.id;
+}
+
 function assigneeOption(user) {
   const opt = document.createElement('option');
   opt.value = user.id;
@@ -620,10 +635,16 @@ function renderTable() {
     // progress via the detail modal). Assignments are never deletable once
     // created, by design — there's no Delete action anywhere in this table.
     const isOwnTask = !hasFullAccess(session.role) && t.assignedBy === session.id;
+    // Whoever can already act on this row gets a one-click Approve the
+    // moment its owner has requested completion — no need to open the
+    // detail modal just to sign off. Only ever shown to a hasFullAccess
+    // viewer since an Intern/External can never approve their own work.
+    const approveAction = (hasFullAccess(session.role) && t.status === 'Pending Approval')
+      ? `<button class="icon-btn icon-btn-approve" onclick="approveCompletion(${t.id})">Approve</button>` : '';
     let actions;
     if (hasFullAccess(session.role)) {
       actions = `<button class="icon-btn" onclick="openDetailModal(${t.id})">Update</button>
-         <button class="icon-btn" onclick="openTaskModal(${t.id})">Edit</button>`;
+         <button class="icon-btn" onclick="openTaskModal(${t.id})">Edit</button>${approveAction}`;
     } else if (isOwnTask) {
       actions = `<button class="icon-btn" onclick="openDetailModal(${t.id})">Update</button>
          <button class="icon-btn" onclick="openTaskModal(${t.id})">Edit</button>`;
@@ -1113,10 +1134,12 @@ function openTaskModal(id) {
   const assignedToSelect = document.getElementById('f_assignedTo');
   const assignedToLabel = document.querySelector('label[for="f_assignedTo"]');
   const canAssignOthers = hasFullAccess(session.role);
+  const task = id ? allTasks.find(t => t.id === id) : null;
+  if (id && !task) return;
 
-  if (id) {
-    const task = allTasks.find(t => t.id === id);
-    if (!task) return;
+  document.getElementById('f_statusApprovalHint').style.display = canAssignOthers ? 'none' : 'block';
+
+  if (task) {
     document.getElementById('taskModalTitle').textContent = 'Edit Assignment';
     document.getElementById('taskId').value = task.id;
     document.getElementById('f_division').value = task.division;
@@ -1181,12 +1204,23 @@ async function onSaveTask(e) {
     return;
   }
 
+  // Marking their own assignment "Completed" here submits it for their
+  // reporting manager's approval instead of actually completing it — see
+  // requestsApproval.
+  const originalTask = id ? allTasks.find(t => t.id === Number(id)) : null;
+  const pendingApproval = requestsApproval(payload.status, payload.assignedTo, originalTask ? originalTask.status : null);
+  if (pendingApproval) {
+    payload.status = 'Pending Approval';
+    payload.progress = 100;
+  }
+
   let result;
   if (id) {
-    result = await updateTask(Number(id), payload, session.id, `updated assignment "${payload.title}"`);
+    const note = pendingApproval ? 'marked complete — submitted for approval' : `updated assignment "${payload.title}"`;
+    result = await updateTask(Number(id), payload, session.id, note);
   } else {
     payload.assignedBy = session.id;
-    payload.progress = 0;
+    if (payload.progress === undefined) payload.progress = 0;
     result = await createTask(payload, session.id);
   }
 
@@ -1197,7 +1231,7 @@ async function onSaveTask(e) {
 
   closeModal('taskModalBackdrop');
   await refreshAndRender();
-  showToast(id ? 'Assignment updated.' : 'Assignment created.');
+  showToast(pendingApproval ? 'Submitted for your manager\'s approval.' : (id ? 'Assignment updated.' : 'Assignment created.'));
 }
 
 /* ---------- Detail modal ---------- */
@@ -1211,7 +1245,7 @@ async function openDetailModal(id) {
   document.getElementById('detailDescription').textContent = task.description || 'No description provided.';
   const detailRows = [
     ['Division', task.division],
-    ['Assigned By', ownerName(task.assignedBy, allUsers)],
+    ['Assigned By', assignedByLabel(task, allUsers)],
     ['Assigned To', ownerName(task.assignedTo, allUsers)],
     ['Priority', task.priority],
     ['Start Date', formatDate(task.startDate)],
@@ -1222,6 +1256,9 @@ async function openDetailModal(id) {
   document.getElementById('detailMeta').innerHTML = `<table class="detail-table"><tbody>${detailRows}</tbody></table>`;
 
   document.getElementById('detailStatus').value = task.status;
+  document.getElementById('detailApprovalHint').style.display = isStaffRole(session.role) ? 'block' : 'none';
+  document.getElementById('approveBtn').style.display =
+    (hasFullAccess(session.role) && task.status === 'Pending Approval') ? 'inline-flex' : 'none';
   const progressInput = document.getElementById('detailProgress');
   progressInput.value = task.progress;
   progressInput.style.setProperty('--pct', `${task.progress}%`);
@@ -1232,16 +1269,42 @@ async function openDetailModal(id) {
 
 async function onSaveStatus() {
   if (!activeTaskId) return;
-  const status = document.getElementById('detailStatus').value;
+  const task = allTasks.find(t => t.id === activeTaskId);
+  let status = document.getElementById('detailStatus').value;
   const progress = Number(document.getElementById('detailProgress').value);
-  const changes = { status, progress: status === 'Completed' ? 100 : progress };
-  const result = await updateTask(activeTaskId, changes, session.id, `set status to "${status}" (${changes.progress}%)`);
+
+  // Marking their own assignment "Completed" here submits it for their
+  // reporting manager's approval instead of actually completing it — see
+  // requestsApproval.
+  const pendingApproval = requestsApproval(status, task ? task.assignedTo : null, task ? task.status : null);
+  if (pendingApproval) status = 'Pending Approval';
+
+  const changes = { status, progress: (status === 'Completed' || pendingApproval) ? 100 : progress };
+  const note = pendingApproval ? 'marked complete — submitted for approval' : `set status to "${status}" (${changes.progress}%)`;
+  const result = await updateTask(activeTaskId, changes, session.id, note);
   if (!result.ok) {
     showToast(result.error || 'Could not update status.');
     return;
   }
+  closeModal('detailModalBackdrop');
   await refreshAndRender();
-  showToast('Status updated.');
+  showToast(pendingApproval ? 'Submitted for your manager\'s approval.' : 'Status updated.');
+}
+
+// Reporting-manager approval: the one action that actually promotes a
+// Pending Approval assignment to Completed. Called both from the row-level
+// "Approve" button (approveCompletion(id) via inline onclick, same pattern
+// as openDetailModal/openTaskModal) and from the detail modal's Approve
+// button (wired in boot(), reading the currently open activeTaskId).
+async function approveCompletion(id) {
+  const result = await updateTask(id, { status: 'Completed', progress: 100 }, session.id, 'approved completion');
+  if (!result.ok) {
+    showToast(result.error || 'Could not approve.');
+    return;
+  }
+  if (activeTaskId === id) closeModal('detailModalBackdrop');
+  await refreshAndRender();
+  showToast('Marked Completed.');
 }
 
 /* ---------- Export ---------- */

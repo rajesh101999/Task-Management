@@ -294,6 +294,8 @@ a:hover { text-decoration: underline; }
 .btn-secondary:hover { background: var(--bg); }
 .btn-danger { background: var(--surface); border-color: var(--danger); color: var(--danger); }
 .btn-danger:hover { background: var(--danger-light); }
+.btn-success { background: var(--success); color: #fff; }
+.btn-success:hover { filter: brightness(0.92); }
 .btn-sm { padding: 6px 10px; font-size: 12px; }
 .btn-lg { padding: 14px 24px; font-size: 16px; margin-top: 4px; }
 
@@ -667,6 +669,10 @@ a:hover { text-decoration: underline; }
   .nav-item { flex-shrink: 0; }
   .top-header { grid-template-columns: 1fr; justify-items: center; row-gap: 10px; }
   .brand-title { font-size: 18px; }
+  /* .top-header stacks taller here, so the 55px sticky offset above no
+     longer lines up -- same reasoning as .sidebar going position: static
+     in this same breakpoint. */
+  .assignments-panel .panel-header { position: static; }
 }
 
 /* ---------- KPIs ---------- */
@@ -791,6 +797,31 @@ a:hover { text-decoration: underline; }
 
 .panel-body { padding: 16px 18px; }
 
+/* Keeps "+ New Assignment" reachable while scrolling down a long
+   assignments table, instead of it scrolling away with the rest of the
+   panel header. .panel's own overflow: hidden (elsewhere just clipping
+   content to its rounded corners) would otherwise become the nearest
+   scroll-container ancestor for position: sticky below and pin this header
+   in place relative to .panel itself -- which never actually scrolls, so
+   the header would never track the page's real scroll position at all.
+   overflow: visible here removes that; .panel-body's own padding already
+   keeps the table clear of the rounded corners regardless, so nothing
+   actually needed clipping. top: 55px matches .sidebar's own sticky
+   offset — .top-header's rendered height — so this sticks right under it,
+   not underneath/behind it. */
+.assignments-panel { overflow: visible; }
+.assignments-panel .panel-header {
+  position: sticky;
+  top: 55px;
+  z-index: 5;
+  background: var(--surface);
+  /* .panel-header's own top edge sits flush against .panel's (no padding
+     between them, unlike .panel-body), so without .panel's overflow:hidden
+     clipping it for us, its now-opaque background would paint square
+     corners poking past .panel's rounded ones -- round them to match. */
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
 .filters {
   display: flex;
   gap: 8px;
@@ -877,6 +908,7 @@ tbody tr:hover { background: var(--surface-2); }
 .pill-Accepted { background: #e0e7ff; color: #3730a3; }
 .pill-InProgress, .pill-Progress { background: #dbeafe; color: #1e40af; }
 .pill-UnderReview { background: #ede9fe; color: #5b21b6; }
+.pill-PendingApproval { background: #ffedd5; color: #9a3412; }
 .pill-Completed { background: #dcfce7; color: #166534; }
 .pill-OnHold { background: #f3f4f6; color: #374151; }
 .pill-Blocked { background: #fee2e2; color: #991b1b; }
@@ -926,6 +958,8 @@ tbody tr:hover { background: var(--surface-2); }
   flex-shrink: 0;
 }
 .icon-btn:hover { background: var(--bg); }
+.icon-btn-approve { border-color: var(--success); color: var(--success); }
+.icon-btn-approve:hover { background: var(--success); color: #fff; }
 
 .empty-state {
   text-align: center;

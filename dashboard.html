@@ -121,7 +121,7 @@
       </div>
     </div>
 
-    <div class="panel">
+    <div class="panel assignments-panel">
       <div class="panel-header">
         <h2 id="tableTitle">Assignments</h2>
         <div class="filters">
@@ -323,6 +323,9 @@
           <div class="field">
             <label for="f_status">Status</label>
             <select id="f_status"></select>
+            <p id="f_statusApprovalHint" style="color: var(--text-muted); font-size: 12px; margin: 6px 0 0; display:none;">
+              Choosing "Completed" submits this for your reporting manager's approval — it won't actually be marked Completed until they approve it.
+            </p>
           </div>
         </div>
         <div class="field">
@@ -352,6 +355,9 @@
       <div class="field" style="margin-top:16px;">
         <label>Status</label>
         <select id="detailStatus"></select>
+        <p id="detailApprovalHint" style="color: var(--text-muted); font-size: 12px; margin: 6px 0 0; display:none;">
+          Choosing "Completed" submits this for your reporting manager's approval — it won't actually be marked Completed until they approve it.
+        </p>
       </div>
       <div class="field">
         <label>Progress: <span id="progressValue">0%</span></label>
@@ -360,6 +366,7 @@
     </div>
     <div class="modal-footer">
       <button type="button" class="btn btn-secondary" data-close="detailModalBackdrop">Close</button>
+      <button class="btn btn-success" id="approveBtn" style="display:none;">Approve as Completed</button>
       <button class="btn btn-primary" id="saveStatusBtn">Update</button>
     </div>
   </div>

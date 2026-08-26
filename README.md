@@ -99,10 +99,23 @@ Teams to scope Managers to their own people.
   *someone else's* password; see Backend below.
 - **Intern / External view** — see only assignments assigned to them;
   update status and progress; add comments. Identical access to each other
-  — just a different label for org-chart purposes.
+  — just a different label for org-chart purposes. Can pick "Completed" for
+  their own assignment same as any other status, but it doesn't actually
+  land as Completed — see Status workflow below.
 - **Dashboard KPIs** — Total, Pending, In Progress, Completed, Overdue.
 - **Status workflow** — Pending → Accepted → In Progress → Under Review →
-  Completed, plus On Hold / Blocked / Cancelled.
+  Pending Approval → Completed, plus On Hold / Blocked / Cancelled. An
+  Intern/External marking their own assignment "Completed" doesn't complete
+  it — it's redirected to **Pending Approval** instead (progress jumps to
+  100% either way, since their own work on it is done). It sits there until
+  their reporting manager (their supervising Employee, a Manager, or Admin —
+  whoever already has access to that assignment) clicks the **Approve**
+  button, the only action that actually promotes it to Completed — a green
+  "Approve" button appears right on the assignments row, and also in the
+  detail modal, whenever a row is Pending Approval. Enforced both in the UI
+  (`requestsApproval`/`approveCompletion` in `js/dashboard.js`) and, more
+  importantly, by the database (`2026-08-24_completion-approval.sql`
+  redirects the write server-side too) — see Backend below.
 - **Reports tab** — a live, filterable preview (My Tasks Only and Search
   first, then Status/Priority/Team, then an Updated From/To date range) with
   one **Export Excel** button that downloads exactly what's currently
@@ -145,6 +158,16 @@ Teams to scope Managers to their own people.
   current by a DB trigger on every update — run it before using the Reports
   tab's Updated From/To date filter, otherwise every row has a null
   updated_at and any date-filtered export comes back empty.
+  `2026-08-24_completion-approval.sql` adds the DB trigger that redirects an
+  Intern/External setting their own assignment to Completed into Pending
+  Approval instead — run it so that rule holds even if someone bypasses the
+  frontend (e.g. a direct API call), not just via the app's own redirect.
+  `2026-08-24_assigned-by-visibility.sql` fixes the assignment detail
+  modal's "Assigned By" showing blank for anyone who couldn't already see
+  the assigner's profile under RLS (most commonly an Intern/External looking
+  at a task their supervising Employee assigned them) — run it so that field
+  reliably resolves to a name (or "Self Assigned" for your own tasks)
+  instead of "—".
 - Adding a team member signs the new account up on a second, memory-only
   Supabase client so the signed-in Employee/Manager/Admin's own session is
   never disturbed — see `addTeamMember` in `js/auth.js`.

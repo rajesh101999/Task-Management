@@ -3,7 +3,7 @@
    `assignments`/`comments`/`activity_log` tables already scopes what each
    signed-in user can see, so these functions don't re-filter by role. */
 
-const STATUSES = ['Pending', 'Accepted', 'In Progress', 'Under Review', 'Completed', 'On Hold', 'Blocked', 'Cancelled'];
+const STATUSES = ['Pending', 'Accepted', 'In Progress', 'Under Review', 'Pending Approval', 'Completed', 'On Hold', 'Blocked', 'Cancelled'];
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
 
 function mapTask(row) {
@@ -109,7 +109,10 @@ async function getActivities() {
 }
 
 function isOverdue(task) {
-  if (task.status === 'Completed' || task.status === 'Cancelled') return false;
+  // Pending Approval sits alongside Completed/Cancelled here — the
+  // Intern/External's own work on it is done, it's just waiting on their
+  // reporting manager's sign-off, so it shouldn't flag as overdue on them.
+  if (task.status === 'Completed' || task.status === 'Cancelled' || task.status === 'Pending Approval') return false;
   const due = new Date(task.dueDate);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -150,6 +153,19 @@ function parseLocalDate(dateStr) {
 function ownerName(id, users) {
   const user = (users || []).find(u => u.id === id);
   return user ? user.name : '—';
+}
+
+// "Assigned By" display for a task: a task someone created for themselves
+// (Intern/External self-adding a task, or anyone assigning to themselves)
+// reads better as "Self Assigned" than as their own name repeated right
+// next to "Assigned To". Otherwise this is just ownerName — including its
+// '—' fallback, which now only means "assigner's profile isn't visible to
+// you" (RLS: 2026-08-24_assigned-by-visibility.sql lets you see whoever
+// assigned *your own* tasks, but not an arbitrary other profile) rather
+// than "never got set".
+function assignedByLabel(task, users) {
+  if (task.assignedBy && task.assignedBy === task.assignedTo) return 'Self Assigned';
+  return ownerName(task.assignedBy, users);
 }
 
 // Looks up the team a profile belongs to (an Employee/Intern/External's own
