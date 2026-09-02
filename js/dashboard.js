@@ -9,11 +9,30 @@ let allTasks = [];
 let allTeams = [];
 let myTeamIds = []; // every team this Manager leads, if any (Admin/Employee: unused)
 let activeTaskId = null;
+let notifications = [];
+let calendarCursor = new Date();
+// '', 'my-week', or 'overdue' — set by applySavedView(). Kept separate from
+// the visible #filterSearch text box (which used to have the sentinel
+// string written straight into it) so the saved view can compose with
+// status/priority/team/mine without stomping on whatever the user actually
+// typed into Search.
+let activeSavedView = '';
 // undefined = no avatar change staged; '' = explicit "remove photo"; a data
 // URL = a new photo picked in the Settings modal, not yet saved.
 let pendingAvatarDataUrl;
 
-document.addEventListener('DOMContentLoaded', boot);
+document.addEventListener('DOMContentLoaded', () => {
+  boot().catch(showStartupError);
+});
+
+// A failed dashboard startup used to leave a completely blank page, which
+// made a recoverable database/configuration error look like a login failure.
+// Keep the original error in DevTools while giving the signed-in person a
+// clear, actionable screen instead.
+function showStartupError(error) {
+  console.error('Dashboard failed to start:', error);
+  document.body.innerHTML = `<main class="startup-error"><h1>Dashboard could not load</h1><p>Please refresh the page. If this continues, send the technical details below to your administrator.</p><pre>${escapeHtml(error && error.message ? error.message : String(error))}</pre><a class="btn btn-primary" href="dashboard.html">Try again</a></main>`;
+}
 
 async function boot() {
   session = await requireAuth();
@@ -90,7 +109,14 @@ async function boot() {
   document.getElementById('filterPriority').addEventListener('change', renderAll);
   document.getElementById('filterTeam').addEventListener('change', renderAll);
   document.getElementById('filterMine').addEventListener('change', renderAll);
-  document.getElementById('filterSearch').addEventListener('input', renderAll);
+  document.getElementById('filterSearch').addEventListener('input', () => {
+    // Typing a real search overrides a saved view's my-week/overdue
+    // criterion rather than silently combining with it — reflect that in
+    // the dropdown too, so it doesn't keep showing a preset that no longer
+    // fully applies.
+    if (activeSavedView) { activeSavedView = ''; document.getElementById('savedView').value = ''; }
+    renderAll();
+  });
   document.getElementById('reportFilterStatus').addEventListener('change', renderReportTable);
   document.getElementById('reportFilterPriority').addEventListener('change', renderReportTable);
   document.getElementById('reportFilterTeam').addEventListener('change', renderReportTable);
@@ -103,6 +129,12 @@ async function boot() {
   document.getElementById('taskForm').addEventListener('submit', onSaveTask);
   document.getElementById('saveStatusBtn').addEventListener('click', onSaveStatus);
   document.getElementById('approveBtn').addEventListener('click', () => approveCompletion(activeTaskId));
+  document.getElementById('commentForm').addEventListener('submit', onAddComment);
+  document.getElementById('attachmentInput').addEventListener('change', onAddAttachment);
+  document.getElementById('savedView').addEventListener('change', applySavedView);
+  document.getElementById('calendarPrevBtn').addEventListener('click', () => changeCalendarMonth(-1));
+  document.getElementById('calendarNextBtn').addEventListener('click', () => changeCalendarMonth(1));
+  document.getElementById('calendarTodayBtn').addEventListener('click', () => { calendarCursor = new Date(); renderCalendar(); });
   document.getElementById('detailProgress').addEventListener('input', (e) => {
     document.getElementById('progressValue').textContent = `${e.target.value}%`;
     e.target.style.setProperty('--pct', `${e.target.value}%`);
@@ -123,6 +155,8 @@ async function boot() {
   });
 
   await refreshData();
+  await syncDueReminders();
+  notifications = await getNotifications();
   fillEmployeeOptions();
   fillTeamFilterOptions();
   renderAll();
@@ -130,8 +164,8 @@ async function boot() {
 
 // Avatar opens/closes the profile dropdown (name, email, logout); the
 // fullscreen icon is wired up too. The theme switcher has its own menu —
-// see setupThemeMenu(). Notifications is still just a visual placeholder —
-// no notification feed exists yet.
+// see setupThemeMenu(). The notification bell's dropdown (list + mark-all-
+// read) is wired up here too — see renderNotifications() for its contents.
 function setupHeaderMenu() {
   const profileBtn = document.getElementById('profileBtn');
   const profileDropdown = document.getElementById('profileDropdown');
@@ -160,6 +194,26 @@ function setupHeaderMenu() {
       document.exitFullscreen();
     } else {
       document.documentElement.requestFullscreen().catch(() => {});
+    }
+  });
+
+  const notifBtn = document.getElementById('notifBtn');
+  const notifDropdown = document.getElementById('notificationDropdown');
+  notifBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = notifDropdown.classList.toggle('open');
+    notifBtn.setAttribute('aria-expanded', String(open));
+  });
+  document.getElementById('markNotificationsRead').addEventListener('click', async () => {
+    const unread = notifications.filter(n => !n.read_at).map(n => n.id);
+    await markNotificationsRead(unread);
+    notifications = notifications.map(n => ({ ...n, read_at: n.read_at || new Date().toISOString() }));
+    renderNotifications();
+  });
+  document.addEventListener('click', (e) => {
+    if (!notifDropdown.contains(e.target) && e.target !== notifBtn) {
+      notifDropdown.classList.remove('open');
+      notifBtn.setAttribute('aria-expanded', 'false');
     }
   });
 }
@@ -474,7 +528,23 @@ async function refreshData() {
 
 async function refreshAndRender() {
   await refreshData();
+  await syncDueReminders();
+  notifications = await getNotifications();
   renderAll();
+}
+
+async function syncDueReminders() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const mine = allTasks.filter(t => t.assignedTo === session.id && !['Completed', 'Cancelled', 'Pending Approval'].includes(t.status));
+  await Promise.all(mine.map(async task => {
+    const due = parseLocalDate(task.dueDate);
+    const days = Math.round((due - today) / 86400000);
+    let type = ''; let message = '';
+    if (days < 0) { type = 'overdue'; message = `"${task.title}" is overdue.`; }
+    else if (days === 0) { type = 'due_today'; message = `"${task.title}" is due today.`; }
+    else if (days <= 3) { type = 'due_soon'; message = `"${task.title}" is due in ${days} day${days === 1 ? '' : 's'}.`; }
+    if (type) await createNotification({ recipient_id: session.id, assignment_id: task.id, type, title: type === 'overdue' ? 'Assignment overdue' : 'Due-date reminder', message, reminder_key: `${type}-${task.dueDate}` });
+  }));
 }
 
 /* ---------- Data scoping ---------- */
@@ -491,12 +561,21 @@ function visibleTasks() {
 // (see filteredReportTasks), the Assignments tab just never passes them, so
 // isUpdatedInRange's own no-bound check ('' / undefined on both sides)
 // makes them a no-op there.
-function filterTasksList(status, priority, teamId, mineOnly, search, fromDate, toDate) {
+// savedView (Assignments tab only — Reports never passes it) is '', 'my-week',
+// or 'overdue', set via the Saved Views dropdown; see activeSavedView.
+function filterTasksList(status, priority, teamId, mineOnly, search, fromDate, toDate, savedView) {
   return visibleTasks().filter(t => {
     if (status && t.status !== status) return false;
     if (priority && t.priority !== priority) return false;
     if (teamId && ownerTeamId(t.assignedTo, allUsers) !== teamId) return false;
     if (mineOnly && t.assignedTo !== session.id) return false;
+    if (savedView === 'overdue' && !isOverdue(t)) return false;
+    if (savedView === 'my-week') {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const end = new Date(today); end.setDate(today.getDate() + (6 - ((today.getDay() + 6) % 7)));
+      const due = parseLocalDate(t.dueDate);
+      if (due < today || due > end) return false;
+    }
     if (search && !`${t.title} ${t.division} ${ownerName(t.assignedTo, allUsers)}`.toLowerCase().includes(search)) return false;
     if (!isUpdatedInRange(t, fromDate, toDate)) return false;
     return true;
@@ -509,7 +588,7 @@ function filteredTasks() {
   const teamId = document.getElementById('filterTeam').value;
   const search = document.getElementById('filterSearch').value.trim().toLowerCase();
   const mineOnly = hasFullAccess(session.role) && document.getElementById('filterMine').checked;
-  return filterTasksList(status, priority, teamId, mineOnly, search);
+  return filterTasksList(status, priority, teamId, mineOnly, search, '', '', activeSavedView);
 }
 
 // Mirrors filteredTasks() but reads the Reports tab's own filter controls —
@@ -544,6 +623,8 @@ function renderAll() {
     renderTeams();
   }
   renderHeaderTeam();
+  renderNotifications();
+  renderCalendar();
 }
 
 // Small always-visible badge in the header showing which team(s) the
@@ -576,7 +657,62 @@ function switchTab(tabId) {
   document.getElementById('employeesView').style.display = tabId === 'employeesView' ? 'block' : 'none';
   document.getElementById('reportsView').style.display = tabId === 'reportsView' ? 'block' : 'none';
   document.getElementById('teamsView').style.display = tabId === 'teamsView' ? 'block' : 'none';
+  document.getElementById('calendarView').style.display = tabId === 'calendarView' ? 'block' : 'none';
+  if (tabId === 'calendarView') renderCalendar();
 }
+
+function renderNotifications() {
+  const list = document.getElementById('notificationList');
+  const unread = notifications.filter(n => !n.read_at);
+  const badge = document.getElementById('notificationBadge');
+  badge.style.display = unread.length ? 'block' : 'none';
+  badge.title = `${unread.length} unread notification${unread.length === 1 ? '' : 's'}`;
+  if (!notifications.length) { list.innerHTML = '<div class="notification-empty">You are all caught up.</div>'; return; }
+  list.innerHTML = notifications.map(n => `<div class="notification-item ${n.read_at ? '' : 'unread'}" ${n.assignment_id ? `onclick="openNotificationTask(${n.assignment_id})"` : ''}><strong>${escapeHtml(n.title)}</strong><p>${escapeHtml(n.message)}</p><time>${formatDateTime(n.created_at)}</time></div>`).join('');
+}
+
+async function openNotificationTask(id) {
+  const unread = notifications.filter(n => n.assignment_id === id && !n.read_at).map(n => n.id);
+  await markNotificationsRead(unread);
+  notifications = notifications.map(n => n.assignment_id === id ? { ...n, read_at: n.read_at || new Date().toISOString() } : n);
+  document.getElementById('notificationDropdown').classList.remove('open');
+  renderNotifications();
+  openDetailModal(id);
+}
+
+function applySavedView() {
+  const choice = document.getElementById('savedView').value;
+  const status = document.getElementById('filterStatus');
+  const priority = document.getElementById('filterPriority');
+  const mine = document.getElementById('filterMine');
+  const search = document.getElementById('filterSearch');
+  status.value = ''; priority.value = ''; search.value = '';
+  // my-week/overdue are tracked in activeSavedView, not typed into the
+  // visible Search box — see its declaration up top.
+  activeSavedView = (choice === 'my-week' || choice === 'overdue') ? choice : '';
+  if (hasFullAccess(session.role)) mine.checked = choice === 'my-week';
+  if (choice === 'approval') status.value = 'Pending Approval';
+  if (choice === 'urgent') priority.value = 'Urgent';
+  renderAll();
+}
+
+function renderCalendar() {
+  const grid = document.getElementById('calendarGrid');
+  if (!grid) return;
+  const year = calendarCursor.getFullYear(), month = calendarCursor.getMonth();
+  document.getElementById('calendarTitle').textContent = calendarCursor.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const first = new Date(year, month, 1); const startOffset = (first.getDay() + 6) % 7;
+  const start = new Date(year, month, 1 - startOffset); const today = new Date(); today.setHours(0, 0, 0, 0);
+  grid.innerHTML = Array.from({ length: 42 }, (_, i) => {
+    const day = new Date(start); day.setDate(start.getDate() + i); const iso = localDateKey(day);
+    const tasks = visibleTasks().filter(t => t.dueDate === iso).slice(0, 3);
+    const count = visibleTasks().filter(t => t.dueDate === iso).length;
+    return `<div class="calendar-day ${day.getMonth() !== month ? 'muted' : ''} ${day.getTime() === today.getTime() ? 'today' : ''}"><span class="calendar-date">${day.getDate()}</span>${tasks.map(t => `<button class="calendar-task ${t.priority === 'Urgent' ? 'urgent' : ''}" title="${escapeHtml(t.title)}" onclick="openDetailModal(${t.id})">${escapeHtml(t.title)}</button>`).join('')}${count > 3 ? `<span class="calendar-more">+${count - 3} more</span>` : ''}</div>`;
+  }).join('');
+}
+
+function localDateKey(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
+function changeCalendarMonth(delta) { calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + delta, 1); renderCalendar(); }
 
 const KPI_ICONS = {
   total: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>',
@@ -655,7 +791,7 @@ function renderTable() {
     return `
       <tr>
         <td>${escapeHtml(t.division)}</td>
-        <td>${escapeHtml(t.title)}</td>
+        <td class="title-cell" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</td>
         <td>${escapeHtml(ownerName(t.assignedTo, allUsers))}</td>
         <td><span class="pill ${statusClass(t.status)}">${t.status}</span></td>
         <td><span class="pill ${statusClass(t.priority)}">${t.priority}</span></td>
@@ -690,7 +826,7 @@ function renderReportTable() {
     return `
       <tr>
         <td>${escapeHtml(t.division)}</td>
-        <td>${escapeHtml(t.title)}</td>
+        <td class="title-cell" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</td>
         <td>${escapeHtml(ownerName(t.assignedTo, allUsers))}</td>
         <td><span class="pill ${statusClass(t.status)}">${t.status}</span></td>
         <td><span class="pill ${statusClass(t.priority)}">${t.priority}</span></td>
@@ -1229,6 +1365,10 @@ async function onSaveTask(e) {
     return;
   }
 
+  if (payload.assignedTo !== session.id) {
+    await createNotification({ recipient_id: payload.assignedTo, assignment_id: result.task.id, type: id ? 'assignment_updated' : 'assignment_assigned', title: id ? 'Assignment updated' : 'New assignment', message: `${session.name} ${id ? 'updated' : 'assigned you'} "${payload.title}".`, reminder_key: null });
+  }
+
   closeModal('taskModalBackdrop');
   await refreshAndRender();
   showToast(pendingApproval ? 'Submitted for your manager\'s approval.' : (id ? 'Assignment updated.' : 'Assignment created.'));
@@ -1264,7 +1404,55 @@ async function openDetailModal(id) {
   progressInput.style.setProperty('--pct', `${task.progress}%`);
   document.getElementById('progressValue').textContent = `${task.progress}%`;
 
+  document.getElementById('attachmentInput').value = '';
+  document.getElementById('commentInput').value = '';
+  await renderTaskCollaboration(id);
+
   openModal('detailModalBackdrop');
+}
+
+async function renderTaskCollaboration(taskId) {
+  const [comments, activities, attachments] = await Promise.all([getComments(taskId), getTaskActivities(taskId), getAttachments(taskId)]);
+  const commentList = document.getElementById('commentList');
+  commentList.innerHTML = comments.length ? comments.map(c => `<div class="comment-item"><span class="who">${escapeHtml(ownerName(c.user_id, allUsers))}</span><span class="when">${formatDateTime(c.created_at)}</span><p>${escapeHtml(c.text)}</p></div>`).join('') : '<div class="activity-item"><span>No comments yet.</span></div>';
+  const activityList = document.getElementById('activityList');
+  activityList.innerHTML = activities.length ? activities.map(a => `<div class="activity-item"><span><strong>${escapeHtml(ownerName(a.user_id, allUsers))}</strong> ${escapeHtml(a.action)}</span><time>${formatDateTime(a.created_at)}</time></div>`).join('') : '<div class="activity-item"><span>No activity yet.</span></div>';
+  const attachmentList = document.getElementById('attachmentList');
+  attachmentList.innerHTML = attachments.length ? attachments.map(a => `<div class="attachment-item"><a href="#" onclick="downloadAttachment('${escapeHtml(a.storage_path)}'); return false;">${escapeHtml(a.file_name)}</a><small>${formatFileSize(a.file_size)} · ${formatDate(a.created_at)}</small></div>`).join('') : '<div class="activity-item"><span>No files attached.</span></div>';
+}
+
+async function onAddComment(e) {
+  e.preventDefault();
+  if (!activeTaskId) return;
+  const input = document.getElementById('commentInput'); const text = input.value.trim();
+  if (!text) return;
+  const result = await addComment(activeTaskId, session.id, text);
+  if (!result.ok) { showToast(result.error || 'Could not post comment.'); return; }
+  input.value = '';
+  const task = allTasks.find(t => t.id === activeTaskId);
+  if (task && task.assignedTo !== session.id) await createNotification({ recipient_id: task.assignedTo, assignment_id: task.id, type: 'comment', title: 'New task comment', message: `${session.name} commented on "${task.title}".`, reminder_key: `${Date.now()}` });
+  await renderTaskCollaboration(activeTaskId);
+  showToast('Comment posted.');
+}
+
+async function onAddAttachment(e) {
+  if (!activeTaskId || !e.target.files[0]) return;
+  const result = await uploadAttachment(activeTaskId, session.id, e.target.files[0]);
+  e.target.value = '';
+  if (!result.ok) { showToast(result.error || 'Could not upload attachment.'); return; }
+  await renderTaskCollaboration(activeTaskId);
+  showToast('Attachment added.');
+}
+
+async function downloadAttachment(path) {
+  const url = await getAttachmentUrl(path);
+  if (!url) { showToast('Could not open that attachment.'); return; }
+  window.open(url, '_blank', 'noopener');
+}
+
+function formatFileSize(size) {
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 async function onSaveStatus() {

@@ -883,6 +883,17 @@ th, td {
   white-space: nowrap;
 }
 
+/* A long Assignment title used to stretch the whole table wider than the
+   screen, pushing Update/Edit in the Actions column past the visible area
+   until you scrolled right. Cap this one column and ellipsize instead —
+   the full title is still there as a native tooltip (see the `title`
+   attribute set alongside this class) and in the detail modal. */
+.title-cell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 th {
   color: var(--text-muted);
   font-weight: 600;
@@ -1056,6 +1067,20 @@ tbody tr:hover { background: var(--surface-2); }
 .comment-item .who { font-weight: 700; font-size: 12px; }
 .comment-item .when { color: var(--text-muted); font-size: 11px; float: right; }
 
+/* ---------- Collaboration and planning ---------- */
+.notification-menu { position: relative; }
+.notification-badge { position: absolute; top: 3px; right: 3px; min-width: 8px; height: 8px; border-radius: 50%; background: var(--danger); border: 2px solid var(--surface); }
+.notification-dropdown { display: none; position: absolute; right: 0; top: calc(100% + 10px); z-index: 120; width: min(380px, calc(100vw - 24px)); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+.notification-dropdown.open { display: block; }
+.notification-heading { display: flex; align-items: center; justify-content: space-between; padding: 13px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.notification-heading button { border: 0; background: none; color: var(--primary); font: inherit; cursor: pointer; }
+.notification-item { padding: 12px 14px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 12px; }
+.notification-item:hover { background: var(--surface-2); }.notification-item.unread { border-left: 3px solid var(--primary); padding-left: 11px; }.notification-item p { margin: 3px 0; color: var(--text-muted); }.notification-item time { color: var(--text-muted); font-size: 11px; }.notification-empty { padding: 24px 14px; color: var(--text-muted); font-size: 13px; text-align: center; }
+.detail-section { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); }.detail-section h4 { margin: 0 0 10px; font-size: 13px; }.detail-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }.attach-control { color: var(--primary); cursor: pointer; font-size: 12px; font-weight: 600; }.attach-control input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.attachment-list, .activity-list { display: flex; flex-direction: column; gap: 7px; }.attachment-item, .activity-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-radius: 7px; padding: 8px 10px; background: var(--bg); font-size: 12px; }.attachment-item a { color: var(--primary); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.attachment-item small, .activity-item time { color: var(--text-muted); white-space: nowrap; }.comment-form { display: flex; gap: 8px; align-items: flex-end; }.comment-form textarea { flex: 1; min-height: 54px; }.comment-form button { margin-bottom: 1px; }.comment-item p { margin: 5px 0 0; white-space: pre-wrap; }.activity-item { align-items: flex-start; }.activity-item span { flex: 1; }
+.calendar-panel .panel-body { padding: 14px; }.calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }.calendar-weekdays span { padding: 7px; color: var(--text-muted); font-size: 11px; font-weight: 700; text-align: center; text-transform: uppercase; }.calendar-day { min-height: 110px; border: 1px solid var(--border); margin: -1px 0 0 -1px; padding: 7px; background: var(--surface); }.calendar-day.muted { background: var(--surface-2); }.calendar-day.today .calendar-date { background: var(--primary); color: #fff; }.calendar-date { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 12px; font-weight: 700; margin-bottom: 5px; }.calendar-task { display: block; width: 100%; padding: 3px 5px; margin: 3px 0; border: 0; border-left: 3px solid var(--primary); border-radius: 3px; background: var(--bg); color: var(--text); font: inherit; font-size: 11px; text-align: left; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }.calendar-task.urgent { border-left-color: var(--danger); }.calendar-more { color: var(--text-muted); font-size: 11px; }
+@media (max-width: 700px) { .calendar-day { min-height: 80px; padding: 4px; }.calendar-task { font-size: 10px; }.calendar-weekdays span { font-size: 9px; padding: 5px 1px; }.comment-form { align-items: stretch; flex-direction: column; }.detail-section-heading { align-items: flex-start; }.notification-dropdown { position: fixed; top: 58px; right: 12px; } }
+
 .toast {
   position: fixed;
   bottom: 20px;
@@ -1077,3 +1102,5 @@ tbody tr:hover { background: var(--surface-2); }
   pointer-events: none;
 }
 .toast.show { opacity: 1; transform: translateY(0); }
+
+.startup-error { max-width: 620px; margin: 12vh auto; padding: 28px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }.startup-error h1 { margin-top: 0; }.startup-error pre { padding: 12px; overflow: auto; border-radius: 7px; background: var(--bg); color: var(--danger); white-space: pre-wrap; font-size: 12px; }

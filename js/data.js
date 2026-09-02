@@ -108,6 +108,62 @@ async function getActivities() {
   return data;
 }
 
+/* ---------- Collaboration: comments, attachments and notifications ---------- */
+
+async function getTaskActivities(taskId) {
+  const { data, error } = await sb.from('activity_log').select('*').eq('assignment_id', taskId).order('created_at', { ascending: false });
+  if (error) { console.error(error); return []; }
+  return data;
+}
+
+async function getAttachments(taskId) {
+  const { data, error } = await sb.from('assignment_attachments').select('*').eq('assignment_id', taskId).order('created_at', { ascending: false });
+  if (error) { console.error(error); return []; }
+  return data;
+}
+
+async function uploadAttachment(taskId, userId, file) {
+  if (!file) return { ok: false, error: 'Choose a file first.' };
+  if (file.size > 10 * 1024 * 1024) return { ok: false, error: 'Attachments must be 10 MB or smaller.' };
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${taskId}/${crypto.randomUUID()}-${safeName}`;
+  const { error: uploadError } = await sb.storage.from('assignment-files').upload(path, file, { contentType: file.type || 'application/octet-stream' });
+  if (uploadError) return { ok: false, error: uploadError.message };
+  const { error } = await sb.from('assignment_attachments').insert({
+    assignment_id: taskId, uploaded_by: userId, file_name: file.name, storage_path: path,
+    file_size: file.size, mime_type: file.type || null,
+  });
+  if (error) {
+    await sb.storage.from('assignment-files').remove([path]);
+    return { ok: false, error: error.message };
+  }
+  await logActivity(taskId, `attached "${file.name}"`, userId);
+  return { ok: true };
+}
+
+async function getAttachmentUrl(path) {
+  const { data, error } = await sb.storage.from('assignment-files').createSignedUrl(path, 60 * 10);
+  return error ? null : data.signedUrl;
+}
+
+async function getNotifications() {
+  const { data, error } = await sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(50);
+  if (error) { console.error(error); return []; }
+  return data;
+}
+
+async function createNotification(notification) {
+  const { error } = await sb.from('notifications').upsert(notification, { onConflict: 'recipient_id,assignment_id,type,reminder_key', ignoreDuplicates: true });
+  if (error) console.error(error);
+  return !error;
+}
+
+async function markNotificationsRead(ids) {
+  if (!ids.length) return;
+  const { error } = await sb.from('notifications').update({ read_at: new Date().toISOString() }).in('id', ids);
+  if (error) console.error(error);
+}
+
 function isOverdue(task) {
   // Pending Approval sits alongside Completed/Cancelled here — the
   // Intern/External's own work on it is done, it's just waiting on their
