@@ -125,6 +125,18 @@ Teams to scope Managers to their own people.
   it (`assignments.updated_at`, kept current by a DB trigger — see
   Backend below) — leave both blank for everything, or set From = To for
   a single day's report.
+- **Collaboration** — assignment details now contain a discussion thread,
+  append-only activity history, and secure file attachments (up to 10 MB).
+  Files are stored in the private `assignment-files` Supabase Storage bucket;
+  access follows the same assignment scope as the rest of the dashboard.
+- **Notifications and reminders** — the header bell shows task assignment,
+  update, comment, and due-date notices. Due reminders are generated when an
+  assignee opens or refreshes the dashboard: overdue, due today, and due in
+  the next three days. They are in-app reminders; sending email/push while no
+  one has the app open requires a scheduled Edge Function or external provider.
+- **Calendar and saved views** — the Calendar tab provides a month view of
+  due dates. The Assignments tab also has quick views for this week's work,
+  overdue tasks, approval queue, and urgent tasks.
 - All data (users + teams + assignments + activity log + comments) lives
   in Postgres, protected by Row Level Security, matching the org chart at
   the top of this file: Intern/External only ever see what's assigned to
@@ -168,6 +180,10 @@ Teams to scope Managers to their own people.
   at a task their supervising Employee assigned them) — run it so that field
   reliably resolves to a name (or "Self Assigned" for your own tasks)
   instead of "—".
+  `2026-08-28_collaboration-notifications-attachments.sql` creates the
+  notifications and attachment metadata tables, their RLS policies, and the
+  private Storage bucket required by the collaboration, reminder, and file
+  features. Run it before deploying this version of the frontend.
 - Adding a team member signs the new account up on a second, memory-only
   Supabase client so the signed-in Employee/Manager/Admin's own session is
   never disturbed — see `addTeamMember` in `js/auth.js`.
