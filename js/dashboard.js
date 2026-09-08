@@ -752,7 +752,7 @@ function statusClass(status) {
 }
 
 function renderTable() {
-  const tasks = filteredTasks().sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const tasks = filteredTasks().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   const tbody = document.getElementById('taskTableBody');
   const empty = document.getElementById('emptyState');
 
@@ -809,7 +809,7 @@ function renderTable() {
 // row shape as the Assignments table (minus Actions, since nothing here is
 // editable) so what's on screen is exactly what Export Excel will write out.
 function renderReportTable() {
-  const tasks = filteredReportTasks().sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const tasks = filteredReportTasks().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   const tbody = document.getElementById('reportTableBody');
   const empty = document.getElementById('reportEmptyState');
   if (!tbody) return;
