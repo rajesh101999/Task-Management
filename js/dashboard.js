@@ -830,7 +830,7 @@ function renderReportTable() {
         <td>${escapeHtml(ownerName(t.assignedTo, allUsers))}</td>
         <td><span class="pill ${statusClass(t.status)}">${t.status}</span></td>
         <td><span class="pill ${statusClass(t.priority)}">${t.priority}</span></td>
-        <td>${escapeHtml(t.estimatedTime || '—')}</td>
+        <td>${escapeHtml(t.actualTime || '—')}</td>
         <td>${formatDate(t.startDate)}</td>
         <td class="${overdue ? 'overdue-text' : ''}">${formatDate(t.dueDate)}${overdue ? ' ⚠' : ''}</td>
         <td>${t.progress}%</td>
@@ -1404,6 +1404,11 @@ async function openDetailModal(id) {
   progressInput.style.setProperty('--pct', `${task.progress}%`);
   document.getElementById('progressValue').textContent = `${task.progress}%`;
 
+  // task.actualTime is stored the same way as estimatedTime ("8 hrs") —
+  // pull just the leading number back out for the plain number input.
+  const actualMatch = /^[\d.]+/.exec(task.actualTime || '');
+  document.getElementById('detailActualTime').value = actualMatch ? actualMatch[0] : '';
+
   document.getElementById('attachmentInput').value = '';
   document.getElementById('commentInput').value = '';
   await renderTaskCollaboration(id);
@@ -1467,7 +1472,12 @@ async function onSaveStatus() {
   const pendingApproval = requestsApproval(status, task ? task.assignedTo : null, task ? task.status : null);
   if (pendingApproval) status = 'Pending Approval';
 
-  const changes = { status, progress: (status === 'Completed' || pendingApproval) ? 100 : progress };
+  const actualHours = document.getElementById('detailActualTime').value.trim();
+  const changes = {
+    status,
+    progress: (status === 'Completed' || pendingApproval) ? 100 : progress,
+    actualTime: actualHours ? `${actualHours} hrs` : '',
+  };
   const note = pendingApproval ? 'marked complete — submitted for approval' : `set status to "${status}" (${changes.progress}%)`;
   const result = await updateTask(activeTaskId, changes, session.id, note);
   if (!result.ok) {

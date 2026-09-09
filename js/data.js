@@ -66,6 +66,7 @@ async function updateTask(id, changes, actorId, note) {
   if (changes.startDate !== undefined) dbChanges.start_date = changes.startDate;
   if (changes.dueDate !== undefined) dbChanges.due_date = changes.dueDate;
   if (changes.estimatedTime !== undefined) dbChanges.estimated_time = changes.estimatedTime;
+  if (changes.actualTime !== undefined) dbChanges.actual_time = changes.actualTime;
   if (changes.progress !== undefined) dbChanges.progress = changes.progress;
   if (changes.remarks !== undefined) dbChanges.remarks = changes.remarks;
 
@@ -240,7 +241,7 @@ function exportTasksToExcel(tasks, filename, users) {
     Owner: ownerName(t.assignedTo, users),
     Status: t.status,
     Priority: t.priority,
-    'Estimated Time': t.estimatedTime,
+    'Time Taken': t.actualTime,
     'Start Date': t.startDate,
     'Due Date': t.dueDate,
     Progress: `${t.progress}%`,
